@@ -1,0 +1,8 @@
+etcpak/
+node_modules/
+build/
+dist/
+release/
+.superpowers/
+.DS_Store
+*.log

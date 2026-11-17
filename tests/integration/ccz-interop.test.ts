@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { wrapCcz } from "../../packages/containers/src/index";
 import { runProcess } from "../../packages/engine/src/process-runner";
 it("is read byte-for-byte by original Cocos ZipUtils across encryption thresholds and keys", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-cocos-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-cocos-"));
   try {
     for (const size of [100, 1500, 2200, 17000])
       for (const key of [

@@ -1,10 +1,10 @@
 {
-  "name": "cptool",
+  "name": "texmori",
   "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "本地纹理编码、预览与批处理工具",
-  "author": "CPTool",
+  "author": "TexMori",
   "main": "dist/electron/main.cjs",
   "scripts": {
     "test": "vitest run",

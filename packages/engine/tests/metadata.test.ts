@@ -11,7 +11,7 @@ it.skipIf(process.platform !== "darwin")(
     const directory = await mkdtemp(
       path.join(
         await import("node:fs/promises").then((m) => m.realpath(os.tmpdir())),
-        "cptool-metadata-",
+        "texmori-metadata-",
       ),
     );
     try {
@@ -33,7 +33,7 @@ it.skipIf(process.platform !== "darwin")(
       expect(await readFile(target)).toEqual(data);
       expect(
         (
-          await runProcess("/usr/bin/xattr", ["-p", "com.cptool.codec", target])
+          await runProcess("/usr/bin/xattr", ["-p", "com.texmori.codec", target])
         ).stdout.trim(),
       ).toBe("etc2_rgba");
       const comment = (

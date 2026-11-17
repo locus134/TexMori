@@ -1,8 +1,8 @@
-# CPTool 开发阶段与验收清单
+# TexMori 开发阶段与验收清单
 
-日期：2026-11-17。状态：功能开发版已实现，正式发布验收进行中。依据：[工程设计规格](superpowers/specs/2026-11-17-cptool-design.md)。
+日期：2026-11-17。状态：功能开发版已实现，正式发布验收进行中。依据：[工程设计规格](superpowers/specs/2026-11-17-texmori-design.md)。
 
-本文件描述里程碑和交付证据，不代替[逐任务实施计划](superpowers/plans/2026-11-17-cptool-implementation.md)。当前功能与实测证据见[验收记录](validation/acceptance.md)；未完成发布关卡前不归档。
+本文件描述里程碑和交付证据，不代替[逐任务实施计划](superpowers/plans/2026-11-17-texmori-implementation.md)。当前功能与实测证据见[验收记录](validation/acceptance.md)；未完成发布关卡前不归档。
 
 ## 阶段 0：验证双内核和互操作基础
 
@@ -71,6 +71,6 @@
 
 优先按阶段顺序推进；容器、内核、队列和 UI 之间以共享类型和能力表为契约。关键测试覆盖真实格式和失败边界，避免仅测试组件内部实现。
 
-根工程已建立 feat/cptool 分支；`etcpak/` 保持独立并由版本锁记录上游 commit，不改写上游历史。
+根工程已建立 feat/texmori 分支；`etcpak/` 保持独立并由版本锁记录上游 commit，不改写上游历史。
 
 仅在本任务实现并验证完成后归档对应 `docs/superpowers/specs/` 和 `plans/` 文件；当前仍有干净机器、最低系统、完整图形加载及正式签名等验收未完成，不归档。

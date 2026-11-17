@@ -50,6 +50,6 @@ export interface DesktopApi {
 }
 declare global {
   interface Window {
-    cptool: DesktopApi;
+    texmori: DesktopApi;
   }
 }

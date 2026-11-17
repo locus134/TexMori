@@ -13,7 +13,7 @@ import os from "node:os";
 import { publishFile } from "../src/publish";
 it("skips existing targets and atomically replaces only after a complete temporary file", async () => {
   const dir = await mkdtemp(
-    path.join(await realpath(os.tmpdir()), "cptool-publish-"),
+    path.join(await realpath(os.tmpdir()), "texmori-publish-"),
   );
   try {
     const source = path.join(dir, "encoded"),

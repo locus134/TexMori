@@ -33,4 +33,4 @@ const api: DesktopApi = {
     return () => ipcRenderer.removeListener("jobs", handler);
   },
 };
-contextBridge.exposeInMainWorld("cptool", api);
+contextBridge.exposeInMainWorld("texmori", api);

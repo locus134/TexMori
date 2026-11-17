@@ -68,7 +68,7 @@ export class AssetService {
         )
           return;
         for (const entry of await readdir(resolved, { withFileTypes: true })) {
-          if (entry.name.startsWith(".cptool-")) continue;
+          if (entry.name.startsWith(".texmori-")) continue;
           await visit(path.join(resolved, entry.name), root);
         }
         return;

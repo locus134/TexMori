@@ -35,7 +35,7 @@ export async function publishFile(
   await mkdir(path.dirname(target), { recursive: true });
   const temporary = path.join(
     path.dirname(target),
-    `.cptool-${randomUUID()}.tmp`,
+    `.texmori-${randomUUID()}.tmp`,
   );
   try {
     await copyFile(source, temporary);

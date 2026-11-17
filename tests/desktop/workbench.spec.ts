@@ -14,9 +14,9 @@ import os from "node:os";
 let preferenceBackup: { file: string; data: Buffer | undefined } | undefined;
 const launchApp = async () => {
   const application = await electron.launch(
-    process.env.CPTOOL_PACKAGED_PATH
+    process.env.TEXMORI_PACKAGED_PATH
       ? {
-          executablePath: process.env.CPTOOL_PACKAGED_PATH,
+          executablePath: process.env.TEXMORI_PACKAGED_PATH,
           args: [],
           cwd: process.cwd(),
         }
@@ -44,7 +44,7 @@ test.afterEach(async () => {
 });
 test("imports, previews actual ETC output, batches to a chosen folder and switches valid parameters", async () => {
   const output = await mkdtemp(
-    path.join(await realpath(os.tmpdir()), "cptool-desktop-"),
+    path.join(await realpath(os.tmpdir()), "texmori-desktop-"),
   );
   const application = await launchApp();
   try {
@@ -111,7 +111,7 @@ test("imports, previews actual ETC output, batches to a chosen folder and switch
       (
         await runProcess("/usr/bin/xattr", [
           "-p",
-          "com.cptool.codec",
+          "com.texmori.codec",
           path.join(output, "rgba.pkm"),
         ])
       ).stdout.trim(),
@@ -126,7 +126,7 @@ test("imports, previews actual ETC output, batches to a chosen folder and switch
 });
 test("remembers import/export folders separately across restart and edits output above the picker button", async () => {
   const directory = await mkdtemp(
-    path.join(await realpath(os.tmpdir()), "cptool-paths-desktop-"),
+    path.join(await realpath(os.tmpdir()), "texmori-paths-desktop-"),
   );
   const input = path.join(directory, "导入 图片"),
     output = path.join(directory, "导出 纹理");
@@ -155,7 +155,7 @@ test("remembers import/export folders separately across restart and edits output
     await field.fill(output);
     await field.press("Tab");
     await expect
-      .poll(() => page.evaluate(() => window.cptool.paths()))
+      .poll(() => page.evaluate(() => window.texmori.paths()))
       .toEqual({ importDirectory: input, outputDirectory: output });
     const fieldBox = await field.boundingBox(),
       buttonBox = await page
@@ -203,8 +203,8 @@ test("remembers import/export folders separately across restart and edits output
       });
     });
     const restored = await page.evaluate(async () => ({
-      assets: await window.cptool.importFiles(true),
-      output: await window.cptool.selectOutput(),
+      assets: await window.texmori.importFiles(true),
+      output: await window.texmori.selectOutput(),
     }));
     expect(restored.assets[0].path).toBe(path.join(input, "rgba.png"));
     expect(restored.output).toBe(editedOutput);
@@ -215,7 +215,7 @@ test("remembers import/export folders separately across restart and edits output
 });
 test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewraps it", async () => {
   const output = await mkdtemp(
-    path.join(await realpath(os.tmpdir()), "cptool-ccz-desktop-"),
+    path.join(await realpath(os.tmpdir()), "texmori-ccz-desktop-"),
   );
   const application = await launchApp();
   try {
@@ -231,7 +231,7 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
       path.join(process.cwd(), "tests/fixtures/generated/rgba.png"),
     );
     const input = await page.evaluate(async () => {
-      const assets = await window.cptool.importFiles();
+      const assets = await window.texmori.importFiles();
       return assets[0].id;
     });
     await application.evaluate(async ({ dialog }, directory) => {
@@ -240,12 +240,12 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
         filePaths: [directory],
       });
     }, output);
-    await page.evaluate(() => window.cptool.selectOutput());
+    await page.evaluate(() => window.texmori.selectOutput());
     await page.evaluate(async (id) => {
-      const ref = await window.cptool.setKey(
+      const ref = await window.texmori.setKey(
         "123456789abcdef013579bdf2468ace0",
       );
-      const plan = await window.cptool.plan([id], {
+      const plan = await window.texmori.plan([id], {
         operation: "encode",
         codec: "pvrtc1_rgba_4",
         container: "ccz",
@@ -258,7 +258,7 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
         output: { mode: "directory", conflict: "overwrite" },
       });
       await new Promise<void>((resolve, reject) => {
-        const stop = window.cptool.onJobs(({ jobs, running }) => {
+        const stop = window.texmori.onJobs(({ jobs, running }) => {
           if (!running) {
             stop();
             jobs.some((j) => j.state === "failed")
@@ -266,7 +266,7 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
               : resolve();
           }
         });
-        window.cptool.start(plan.id).catch(reject);
+        window.texmori.start(plan.id).catch(reject);
       });
     }, input);
     const ccz = path.join(output, "rgba.pvr.ccz");
@@ -278,13 +278,13 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
       });
     }, ccz);
     await page.evaluate(async () => {
-      const assets = await window.cptool.importFiles(),
+      const assets = await window.texmori.importFiles(),
         asset = assets.find((a) => a.container === "ccz")!,
-        ref = await window.cptool.setKey("123456789abcdef013579bdf2468ace0");
-      const unlocked = await window.cptool.refresh(asset.id, ref);
+        ref = await window.texmori.setKey("123456789abcdef013579bdf2468ace0");
+      const unlocked = await window.texmori.refresh(asset.id, ref);
       if (unlocked.width !== 32) throw Error("Wrong decrypted dimensions");
       for (const operation of ["decode", "rewrap"] as const) {
-        const plan = await window.cptool.plan([asset.id], {
+        const plan = await window.texmori.plan([asset.id], {
           operation,
           container: operation === "decode" ? "png" : "pvr",
           options: {},
@@ -296,7 +296,7 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
           output: { mode: "directory", conflict: "overwrite" },
         });
         await new Promise<void>((resolve, reject) => {
-          const stop = window.cptool.onJobs(({ jobs, running }) => {
+          const stop = window.texmori.onJobs(({ jobs, running }) => {
             if (!running) {
               stop();
               jobs.some((j) => j.state === "failed")
@@ -304,7 +304,7 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
                 : resolve();
             }
           });
-          window.cptool.start(plan.id).catch(reject);
+          window.texmori.start(plan.id).catch(reject);
         });
       }
     });
@@ -319,7 +319,7 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
     expect(
       await page.evaluate(() => ({
         node: typeof (window as unknown as { require?: unknown }).require,
-        bridge: typeof window.cptool.preview,
+        bridge: typeof window.texmori.preview,
       })),
     ).toEqual({ node: "undefined", bridge: "function" });
   } finally {

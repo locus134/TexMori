@@ -9,7 +9,7 @@ import { inspectTexture, unwrapCcz } from "../../packages/containers/src/index";
 import sharp from "sharp";
 const root = process.cwd();
 it("multiplies numeric RGB by Alpha only when enabled, preserving source pixels and Alpha", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-rgb-alpha-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-rgb-alpha-"));
   try {
     const file = path.join(dir, "source.png");
     await sharp({
@@ -77,7 +77,7 @@ it("multiplies numeric RGB by Alpha only when enabled, preserving source pixels 
   }
 });
 it("encodes and decodes every real format, with valid ETC PKM and BC DDS", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-matrix-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-matrix-"));
   const assets = new AssetService();
   try {
     const [asset] = await assets.import(
@@ -123,7 +123,7 @@ it("encodes and decodes every real format, with valid ETC PKM and BC DDS", async
   }
 });
 it("preserves logical PKM dimensions after edge padding and rewraps without an encoder", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-padding-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-padding-"));
   const assets = new AssetService();
   try {
     const [asset] = await assets.import(
@@ -181,7 +181,7 @@ it("preserves logical PKM dimensions after edge padding and rewraps without an e
 it.each(["srgb", "linear"] as const)(
   "converts premultiplied %s input into a straight-alpha PNG working image",
   async (colorSpace) => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-alpha-"));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-alpha-"));
     try {
       const file = path.join(dir, "alpha.png");
       await sharp({
@@ -235,7 +235,7 @@ it.each(["srgb", "linear"] as const)(
   },
 );
 it("generates full mip chains and exercises every exposed PVRTC quality and mip filter", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-mips-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-mips-"));
   try {
     const assets = new AssetService(),
       [asset] = await assets.import(

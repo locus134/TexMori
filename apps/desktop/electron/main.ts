@@ -49,7 +49,7 @@ import {
 import type { DesktopAsset, PlanSummary } from "../src/api";
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: "cptool-preview",
+    scheme: "texmori-preview",
     privileges: {
       standard: true,
       secure: true,
@@ -106,7 +106,7 @@ const keyFor = (ref?: string) => {
 function imageUrl(file: string) {
   const token = randomUUID();
   images.set(token, file);
-  return `cptool-preview://${token}/image`;
+  return `texmori-preview://${token}/image`;
 }
 function displayAsset(asset: Asset): DesktopAsset {
   if (asset.container === "image" && !thumbnails.has(asset.id))
@@ -134,7 +134,7 @@ async function work(
     const child = utilityProcess.fork(
       path.join(__dirname, "engine-worker.cjs"),
       [],
-      { stdio: "pipe", serviceName: "CPTool 纹理工作进程" },
+      { stdio: "pipe", serviceName: "TexMori 纹理工作进程" },
     );
     let settled = false,
       hardStop: ReturnType<typeof setTimeout> | undefined;
@@ -265,7 +265,7 @@ async function existingFiles(directory: string): Promise<string[]> {
   const result: string[] = [];
   try {
     for (const e of await readdir(directory, { withFileTypes: true })) {
-      if (e.name.startsWith(".cptool-")) continue;
+      if (e.name.startsWith(".texmori-")) continue;
       const file = path.join(directory, e.name);
       if (e.isDirectory()) result.push(...(await existingFiles(file)));
       else result.push(file);
@@ -494,8 +494,8 @@ app.whenReady().then(async () => {
   );
   await preferences.load();
   outputDirectory = preferences.paths().outputDirectory;
-  sessionDirectory = await mkdtemp(path.join(app.getPath("temp"), "cptool-"));
-  protocol.handle("cptool-preview", (request) => {
+  sessionDirectory = await mkdtemp(path.join(app.getPath("temp"), "texmori-"));
+  protocol.handle("texmori-preview", (request) => {
     const token = new URL(request.url).hostname,
       file = images.get(token);
     if (!file) return new Response("Not found", { status: 404 });
@@ -507,7 +507,7 @@ app.whenReady().then(async () => {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: "#202225",
-    title: "CPTool · 纹理工作台",
+    title: "TexMori · 纹理工作台",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,

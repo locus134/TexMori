@@ -5,7 +5,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { AssetService } from "../src/assets";
 it("scans a fixed snapshot without following directory links or reimporting output", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-assets-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-assets-"));
   try {
     await mkdir(path.join(dir, "输出"));
     await mkdir(path.join(dir, "sub"));
@@ -49,7 +49,7 @@ it("scans a fixed snapshot without following directory links or reimporting outp
   }
 });
 it("keeps corrupt inputs as individual errors and identifies images by content", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-probe-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-probe-"));
   try {
     await writeFile(path.join(dir, "broken.pkm"), "PKM 10");
     await sharp({
@@ -71,7 +71,7 @@ it("keeps corrupt inputs as individual errors and identifies images by content",
   }
 });
 it("registers missing inputs as visible errors without losing valid siblings", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-missing-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-missing-"));
   try {
     const file = path.join(dir, "ok.png");
     await sharp({

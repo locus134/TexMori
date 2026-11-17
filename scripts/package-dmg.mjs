@@ -3,17 +3,17 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
 const stage = path.resolve("build/dmg-stage"),
-  target = path.resolve(`release/CPTool-${pkg.version}-macOS-arm64.dmg`);
+  target = path.resolve(`release/TexMori-${pkg.version}-macOS-arm64.dmg`);
 await rm(stage, { recursive: true, force: true });
 await mkdir(stage, { recursive: true });
-await cp("release/mac-arm64/CPTool.app", path.join(stage, "CPTool.app"), {
+await cp("release/mac-arm64/TexMori.app", path.join(stage, "TexMori.app"), {
   recursive: true,
   verbatimSymlinks: true,
 });
 await symlink("/Applications", path.join(stage, "Applications"));
-const pending=path.resolve(`build/CPTool-${pkg.version}-pending.dmg`);
+const pending=path.resolve(`build/TexMori-${pkg.version}-pending.dmg`);
 await rm(pending, { force: true });
-execFileSync('codesign',['--verify','--deep','--strict',path.join(stage,'CPTool.app')],{stdio:'pipe'});
+execFileSync('codesign',['--verify','--deep','--strict',path.join(stage,'TexMori.app')],{stdio:'pipe'});
 let method = "hdiutil create";
 try {
   execFileSync(
@@ -21,7 +21,7 @@ try {
     [
       "create",
       "-volname",
-      "CPTool",
+      "TexMori",
       "-srcfolder",
       stage,
       "-fs",
@@ -36,7 +36,7 @@ try {
 } catch (error) {
   // User-space hybrid creation also works on hosts that prohibit image mounting.
   await rm(pending, { force: true });
-  const raw = path.resolve("build/CPTool-uncompressed.dmg");
+  const raw = path.resolve("build/TexMori-uncompressed.dmg");
   await rm(raw, { force: true });
   method = "hdiutil makehybrid + convert";
   try {
@@ -46,7 +46,7 @@ try {
         "makehybrid",
         "-hfs",
         "-hfs-volume-name",
-        "CPTool",
+        "TexMori",
         "-o",
         raw,
         "-ov",

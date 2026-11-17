@@ -1,4 +1,4 @@
-# CPTool
+# TexMori
 
 面向游戏资源工作流的跨平台纹理压缩桌面工具，首期开发和验收 macOS。界面使用 React + 手写 CSS，以 etcpak 和 PVRTC 专用编码器组成双内核。
 
@@ -6,7 +6,7 @@
 
 ## 使用
 
-本机构建的应用位于 `release/mac-arm64/CPTool.app`；DMG 位于 `release/CPTool-0.1.1-macOS-arm64.dmg`。目标平台为 Apple Silicon、macOS 13 或更高版本。当前使用本地 ad-hoc 签名，未进行 Developer ID 签名或公证。
+本机构建的应用位于 `release/mac-arm64/TexMori.app`；DMG 位于 `release/TexMori-0.1.1-macOS-arm64.dmg`。目标平台为 Apple Silicon、macOS 13 或更高版本。当前使用本地 ad-hoc 签名，未进行 Developer ID 签名或公证。
 
 导入图片或目录，选择操作、编码和输出位置，检查真实预览后开始批处理。预览的 100% 按设备像素比例显示。输入和输出加密密钥独立，默认仅在本次会话保存。
 
@@ -29,8 +29,8 @@ npm run dev
 
 ## 工程文档
 
-- [实施计划](docs/superpowers/plans/2026-11-17-cptool-implementation.md)：任务、接口、测试与发布关卡。
-- [产品与工程设计规格](docs/superpowers/specs/2026-11-17-cptool-design.md)：功能范围、格式能力、交互、架构、输出规则及验收要求。
+- [实施计划](docs/superpowers/plans/2026-11-17-texmori-implementation.md)：任务、接口、测试与发布关卡。
+- [产品与工程设计规格](docs/superpowers/specs/2026-11-17-texmori-design.md)：功能范围、格式能力、交互、架构、输出规则及验收要求。
 - [开发阶段与验收清单](docs/engineering-roadmap.md)：工程推进顺序、前置验证和交付证据。
 
 ## 已确认的核心需求

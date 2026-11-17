@@ -13,7 +13,7 @@ import type { DesktopAsset, PlanSummary } from "./api";
 import { AssetList } from "./components/AssetList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PreviewCanvas } from "./components/PreviewCanvas";
-const api = window.cptool;
+const api = window.texmori;
 const initial: ConversionRequest = {
   operation: "encode",
   codec: "etc2_rgba",
@@ -292,7 +292,7 @@ export function App() {
       <header className="app-header">
         <div className="brand">
           <span className="brand-symbol">▦</span>
-          <strong>CPTool</strong>
+          <strong>TexMori</strong>
           <span className="app-name">纹理工作台</span>
         </div>
         <span className="engine-indicator">

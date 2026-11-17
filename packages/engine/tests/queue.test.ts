@@ -8,7 +8,7 @@ it("continues after a failed file and retries only failed jobs", async () => {
   const dir = await mkdtemp(
     path.join(
       await import("node:fs/promises").then((m) => m.realpath(os.tmpdir())),
-      "cptool-queue-",
+      "texmori-queue-",
     ),
   );
   try {
@@ -99,7 +99,7 @@ it("does not report idle until per-job cleanup is finished", async () => {
   const dir = await mkdtemp(
     path.join(
       await import("node:fs/promises").then((m) => m.realpath(os.tmpdir())),
-      "cptool-cleanup-",
+      "texmori-cleanup-",
     ),
   );
   try {

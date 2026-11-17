@@ -1,5 +1,5 @@
-appId: com.cptool.desktop
-productName: CPTool
+appId: com.texmori.desktop
+productName: TexMori
 electronLanguages:
   - zh-CN
   - zh-TW
@@ -36,4 +36,4 @@ mac:
   hardenedRuntime: true
   entitlements: apps/desktop/resources/entitlements.mac.plist
   entitlementsInherit: apps/desktop/resources/entitlements.mac.plist
-artifactName: CPTool-${version}-macOS-${arch}.${ext}
+artifactName: TexMori-${version}-macOS-${arch}.${ext}

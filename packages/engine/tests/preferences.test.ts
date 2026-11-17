@@ -13,7 +13,7 @@ import path from "node:path";
 import { Preferences, normalizeOutputDirectory } from "../src/preferences";
 it("persists independent import/export paths across restarts without unrelated data", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "cptool-preferences-"),
+    path.join(os.tmpdir(), "texmori-preferences-"),
   );
   try {
     const file = path.join(directory, "preferences.json"),
@@ -42,7 +42,7 @@ it("persists independent import/export paths across restarts without unrelated d
   }
 });
 it("canonicalizes existing parent aliases before appending new output subdirectories", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "cptool-parent-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "texmori-parent-"));
   try {
     await mkdir(path.join(directory, "real"));
     await symlink(path.join(directory, "real"), path.join(directory, "alias"));
@@ -58,7 +58,7 @@ it("canonicalizes existing parent aliases before appending new output subdirecto
   }
 });
 it("accepts editable absolute/new output folders, expands home and rejects files/relative paths", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "cptool-path-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "texmori-path-"));
   try {
     await mkdir(path.join(directory, "existing"));
     await writeFile(path.join(directory, "file"), "x");

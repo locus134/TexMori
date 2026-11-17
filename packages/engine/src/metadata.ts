@@ -15,7 +15,7 @@ export async function writeEncodingMetadata(
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  const plist = path.join(path.dirname(file), `.cptool-${randomUUID()}.plist`);
+  const plist = path.join(path.dirname(file), `.texmori-${randomUUID()}.plist`);
   try {
     signal?.throwIfAborted();
     await writeFile(
@@ -42,13 +42,13 @@ export async function writeEncodingMetadata(
     );
     await runProcess(
       "/usr/bin/xattr",
-      ["-w", "com.cptool.codec", codec, file],
+      ["-w", "com.texmori.codec", codec, file],
       signal,
       10000,
     );
     await runProcess(
       "/usr/bin/xattr",
-      ["-w", "com.cptool.container", container, file],
+      ["-w", "com.texmori.container", container, file],
       signal,
       10000,
     );

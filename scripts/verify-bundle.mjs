@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
-const app = process.argv[2] ?? "release/mac-arm64/CPTool.app",
+const app = process.argv[2] ?? "release/mac-arm64/TexMori.app",
   resources = path.join(app, "Contents/Resources");
 const report = { app, architecture: "arm64", minimumMacOS: "13.0", checks: [] };
 for (const name of ["etcpak", "PVRTexToolCLI"]) {

@@ -111,7 +111,7 @@ PKM 只保存单层纹理；选择 PKM 时禁用 Mipmap。首期不将 KTX/KTX2 
 
 PVR.CCZ 是 PVR 的 CCZ 外层封装。普通 CCZ 使用 zlib 压缩；加密 CCZ 使用 Cocos/TexturePacker 内容保护布局，不用自定义 AES/ZIP 替代。通过文件签名区分普通 `CCZ!` 与加密 `CCZp`，不能通过扩展名判断是否加密。
 
-实现包含头字段和字节序、压缩数据、加密覆盖区间、密钥派生、校验和及版本验证。以实际 Cocos 加载实现和 TexturePacker 样本为互操作依据，不能仅以自家编码器解自家结果作为兼容证据。
+实现包含头字段和字节序、压缩数据、加密覆盖区间、密钥派生、校验和及版本验证。用户于 2026-11-17 批准以独立格式校验及原版 Cocos 加载验证替代运行 TexturePacker；不再要求 TexturePacker 生成样本作为开发前置条件。不能仅以自家编码器解自家结果作为兼容证据；没有相应样本时不宣称已验证 TexturePacker 来源文件。
 
 ### 7.2 密钥
 
@@ -124,7 +124,7 @@ PVR.CCZ 是 PVR 的 CCZ 外层封装。普通 CCZ 使用 zlib 压缩；加密 CC
 
 ### 7.3 兼容验收
 
-TexturePacker 生成普通和加密样本 → CPTool 导入并解码；CPTool 生成普通和加密样本 → Cocos 实际加载；可获得 TexturePacker 读取能力时进一步验证反向读取。另测错误密钥、截断、非法长度、低于/跨越加密覆盖阈值的文件、连续使用不同密钥。PVR → CCZ → PVR 必须字节一致。
+CPTool 生成普通和加密样本 → 未修改的原版 Cocos ZipUtils 解包 → 独立纹理读取/实际显示。独立编译原版 ZipUtils 方法的验证工具可证明容器与加密互操作，但不能代称完整 Cocos 图形引擎已加载；两项证据分别记录。另测错误密钥、截断、非法长度、低于/跨越加密覆盖阈值的文件、CPTool 连续使用不同密钥。PVR → CCZ → PVR 必须字节一致。原版 Cocos 同进程切换密钥的状态行为单独记录，不能用每次新进程验证代替。
 
 该功能面向现有游戏资源兼容，不表述为现代强加密保险库。
 
@@ -238,7 +238,7 @@ PKM 适配实现明确的头字段/格式映射、有效负载长度和逻辑尺
 - 先确定并记录 Electron 和两个编码器共同可用的 macOS 最低版本与 CPU 架构，再锁定发布目标。未验证前不宣传 universal 支持。
 - 发布前完成依赖许可证清单、内核版本固定、动态库检查和干净机器运行验证。签名/公证是否具备账号条件单独记录；未完成时标注安装包状态。
 - 逐一验证 16 个编码模式的有效输出、解码尺寸和通道；ETC PKM、BC DDS、PVRTC PVR/CCZ 均应通过独立读取路径验证。
-- 通过 TexturePacker 样本和 Cocos 加载验证 CCZ 互操作，覆盖错误密钥和更换密钥。
+- 通过用户批准的独立格式与 Cocos 路径验证 CCZ 互操作，覆盖错误密钥和更换密钥；完整图形加载与独立方法验证分别记录。
 - 验证格式切换、无效参数不传入、取消、失败重试、过期预览、Unicode 路径、同名冲突和覆盖失败保留原文件。
 - 构建、类型检查、关键模块测试与真实桌面操作均提供证据；只通过网页演示不能判定桌面应用完成。
 
@@ -256,4 +256,4 @@ PKM 适配实现明确的头字段/格式映射、有效负载长度和逻辑尺
 - [Cocos ZipUtils 上游源码位置](https://github.com/cocos2d/cocos2d-x/blob/v3/cocos/base/ZipUtils.cpp)
 - [Android ETC1 / PKM 说明](https://developer.android.com/reference/android/opengl/ETC1)
 
-当前已核实公开接口和本地源码能力，尚未下载、运行或验证 PVRTC 编码器与 TexturePacker 样本。本规格中的这些验证均为实施前置要求，不是已完成结论。
+PVRTexTool 5.5 已从官方 2023_R1 安装包提取并在 arm64 原生运行；16 种编码及预览已有真实测试。当前验证状态见 `docs/validation/acceptance.md`。TexturePacker 不再运行，其来源样本兼容不作已完成结论。

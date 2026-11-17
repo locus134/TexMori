@@ -40,8 +40,9 @@
   },
   "release": {
     "architecture": "arm64",
-    "minimumMacOS": "12.0",
+    "minimumMacOS": "13.0",
     "minimumOSRuntimeVerified": false,
-    "cleanMachineVerified": false
+    "cleanMachineVerified": false,
+    "electron": "45.3.3"
   }
 }

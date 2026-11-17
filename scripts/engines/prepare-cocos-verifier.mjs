@@ -1,17 +1,34 @@
-import { readFile,writeFile,mkdir } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';import path from 'node:path';
-const root=fileURLToPath(new URL('../../',import.meta.url)),directory=path.join(root,'build/cocos-reference');
-await mkdir(directory,{recursive:true});
-const commit=execFileSync('git',['ls-remote','https://github.com/cocos2d/cocos2d-x.git','refs/heads/v3'],{encoding:'utf8'}).split(/\s/)[0];
-if(!/^[0-9a-f]{40}$/.test(commit))throw Error('Cannot resolve Cocos reference');
-const response=await fetch(`https://raw.githubusercontent.com/cocos2d/cocos2d-x/${commit}/cocos/base/ZipUtils.cpp`);
-if(!response.ok)throw Error(`Cocos source: ${response.status}`);
-const source=await response.text();await writeFile(path.join(directory,'ZipUtils.cpp'),source);
-const functions=['inline void ZipUtils::decodeEncodedPvr','inline unsigned int ZipUtils::checksumPvr','int ZipUtils::inflateCCZBuffer','void ZipUtils::setPvrEncryptionKeyPart','void ZipUtils::setPvrEncryptionKey('].map(signature=>{
- const start=source.indexOf(signature),end=source.indexOf('\n}',start);if(start<0||end<0)throw Error(`Missing reference: ${signature}`);return source.slice(start,end+2);
-}).join('\n\n');
-const stub=`${source.slice(0,source.indexOf('#include'))}
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+const root = fileURLToPath(new URL("../../", import.meta.url)),
+  directory = path.join(root, "build/cocos-reference");
+await mkdir(directory, { recursive: true });
+const commit = "e4b6a5ef8fcdc99a7ebea606312b67fe4c534b9f";
+if (!/^[0-9a-f]{40}$/.test(commit))
+  throw Error("Cannot resolve Cocos reference");
+const response = await fetch(
+  `https://raw.githubusercontent.com/cocos2d/cocos2d-x/${commit}/cocos/base/ZipUtils.cpp`,
+);
+if (!response.ok) throw Error(`Cocos source: ${response.status}`);
+const source = await response.text();
+await writeFile(path.join(directory, "ZipUtils.cpp"), source);
+const functions = [
+  "inline void ZipUtils::decodeEncodedPvr",
+  "inline unsigned int ZipUtils::checksumPvr",
+  "int ZipUtils::inflateCCZBuffer",
+  "void ZipUtils::setPvrEncryptionKeyPart",
+  "void ZipUtils::setPvrEncryptionKey(",
+]
+  .map((signature) => {
+    const start = source.indexOf(signature),
+      end = source.indexOf("\n}", start);
+    if (start < 0 || end < 0) throw Error(`Missing reference: ${signature}`);
+    return source.slice(start, end + 2);
+  })
+  .join("\n\n");
+const stub = `${source.slice(0, source.indexOf("#include"))}
 #include <zlib.h>
 #include <cassert>
 #include <cstdlib>
@@ -44,7 +61,30 @@ int main(int argc,char**argv){
  std::ofstream file(argv[2],std::ios::binary);file.write(reinterpret_cast<char*>(out),length);free(out);return file.good()?0:6;
 }
 `;
-await writeFile(path.join(directory,'verify-cocos.cpp'),stub);
-execFileSync('clang++',['-std=c++17','-O2',path.join(directory,'verify-cocos.cpp'),'-lz','-o',path.join(directory,'verify-cocos')],{stdio:'inherit'});
-await writeFile(path.join(directory,'provenance.json'),JSON.stringify({repository:'https://github.com/cocos2d/cocos2d-x',commit,extraction:'Unmodified decodeEncodedPvr, checksumPvr, inflateCCZBuffer and key setters; stubbed platform/logging only; COCOS2D_DEBUG=1. Not a full graphics-engine runtime.'},null,2));
-console.log('Cocos ZipUtils reference verifier compiled: '+commit);
+await writeFile(path.join(directory, "verify-cocos.cpp"), stub);
+execFileSync(
+  "clang++",
+  [
+    "-std=c++17",
+    "-O2",
+    path.join(directory, "verify-cocos.cpp"),
+    "-lz",
+    "-o",
+    path.join(directory, "verify-cocos"),
+  ],
+  { stdio: "inherit" },
+);
+await writeFile(
+  path.join(directory, "provenance.json"),
+  JSON.stringify(
+    {
+      repository: "https://github.com/cocos2d/cocos2d-x",
+      commit,
+      extraction:
+        "Unmodified decodeEncodedPvr, checksumPvr, inflateCCZBuffer and key setters; stubbed platform/logging only; COCOS2D_DEBUG=1. Not a full graphics-engine runtime.",
+    },
+    null,
+    2,
+  ),
+);
+console.log("Cocos ZipUtils reference verifier compiled: " + commit);

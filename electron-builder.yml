@@ -1,0 +1,33 @@
+appId: com.cptool.desktop
+productName: CPTool
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+asarUnpack:
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
+extraResources:
+  - from: build/etcpak/etcpak
+    to: engines/etcpak
+  - from: build/engines/PVRTexToolCLI
+    to: engines/PVRTexToolCLI
+  - from: build/engines/PowerVR-Tools-License.html
+    to: licenses/PowerVR-Tools-License.html
+  - from: build/licenses
+    to: licenses/components
+  - from: THIRD_PARTY_NOTICES.md
+    to: licenses/THIRD_PARTY_NOTICES.md
+  - from: config/engines.lock.json
+    to: engines/engines.lock.json
+mac:
+  category: public.app-category.developer-tools
+  minimumSystemVersion: "13.0"
+  target: zip
+  icon: build/icon.icns
+  identity: "-"
+  hardenedRuntime: true
+  entitlements: apps/desktop/resources/entitlements.mac.plist
+  entitlementsInherit: apps/desktop/resources/entitlements.mac.plist
+artifactName: CPTool-${version}-macOS-${arch}.${ext}

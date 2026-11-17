@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Job, PlannedOutput } from "../../core/src/index";
 import { publishFile } from "./publish";
+import { access } from "node:fs/promises";
+export interface ProcessedFile {
+  path: string;
+  target?: string;
+  inputBytes?: number;
+  outputBytes?: number;
+}
 type Work<T> = {
   run: () => Promise<T>;
   resolve: (value: T) => void;
@@ -56,7 +63,7 @@ export class JobQueue {
     private convert: (
       plan: PlannedOutput,
       signal: AbortSignal,
-    ) => Promise<string>,
+    ) => Promise<string | ProcessedFile>,
     private scheduler: WorkScheduler,
     private cleanup: (file: string) => Promise<void> = async () => {},
     private decorate?: (
@@ -64,6 +71,7 @@ export class JobQueue {
       file: string,
       signal: AbortSignal,
     ) => Promise<string | undefined>,
+    private options?: { concurrency: () => number },
   ) {}
   private emit() {
     this.onChange(structuredClone(this.jobs), this.running);
@@ -98,50 +106,87 @@ export class JobQueue {
     this.controller = new AbortController();
     this.emit();
     try {
-      for (let i = 0; i < this.jobs.length; i++) {
-        const job = this.jobs[i],
-          plan = this.plans[i];
-        if (job.state !== "pending") continue;
-        if (this.controller.signal.aborted) {
-          job.state = "cancelled";
+      let nextIndex = 0;
+      const worker = async () => {
+        while (nextIndex < this.jobs.length) {
+          const i = nextIndex++;
+          const job = this.jobs[i],
+            plan = this.plans[i];
+          if (job.state !== "pending") continue;
+          if (this.controller.signal.aborted) {
+            job.state = "cancelled";
+            job.finishedAt = Date.now();
+            this.emit();
+            continue;
+          }
+          job.state = "running";
+          job.startedAt = Date.now();
+          job.error = undefined;
+          this.emit();
+          let temporary: string | undefined;
+          try {
+            if (plan.error) throw Error(plan.error);
+            if (
+              plan.request.operation === "tinify" &&
+              plan.request.output.conflict === "skip" &&
+              !plan.target.endsWith(".auto") &&
+              (await access(plan.target).then(
+                () => true,
+                () => false,
+              ))
+            ) {
+              job.state = "skipped";
+              job.finishedAt = Date.now();
+              this.emit();
+              continue;
+            }
+            const signal = this.controller.signal;
+            const result = this.options
+              ? await this.convert(plan, signal)
+              : await this.scheduler.run(
+                  () => this.convert(plan, signal),
+                  signal,
+                );
+            temporary = typeof result === "string" ? result : result.path;
+            const target =
+              typeof result === "string"
+                ? plan.target
+                : (result.target ?? plan.target);
+            if (typeof result !== "string") {
+              job.inputBytes = result.inputBytes;
+              job.outputBytes = result.outputBytes;
+            }
+            const published = await publishFile(
+              temporary,
+              target,
+              plan.request.output.conflict,
+              signal,
+              this.decorate
+                ? async (file) => {
+                    job.warning = await this.decorate!(plan, file, signal);
+                  }
+                : undefined,
+            );
+            job.state = published ? "succeeded" : "skipped";
+            if (published) job.output = target;
+          } catch (e) {
+            job.state = this.controller.signal.aborted ? "cancelled" : "failed";
+            job.error = e instanceof Error ? e.message : "任务失败";
+          } finally {
+            if (temporary) await this.cleanup(temporary).catch(() => {});
+          }
           job.finishedAt = Date.now();
           this.emit();
-          continue;
         }
-        job.state = "running";
-        job.startedAt = Date.now();
-        job.error = undefined;
-        this.emit();
-        let temporary: string | undefined;
-        try {
-          if (plan.error) throw Error(plan.error);
-          const signal = this.controller.signal;
-          temporary = await this.scheduler.run(
-            () => this.convert(plan, signal),
-            signal,
-          );
-          const published = await publishFile(
-            temporary,
-            plan.target,
-            plan.request.output.conflict,
-            signal,
-            this.decorate
-              ? async (file) => {
-                  job.warning = await this.decorate!(plan, file, signal);
-                }
-              : undefined,
-          );
-          job.state = published ? "succeeded" : "skipped";
-          if (published) job.output = plan.target;
-        } catch (e) {
-          job.state = this.controller.signal.aborted ? "cancelled" : "failed";
-          job.error = e instanceof Error ? e.message : "任务失败";
-        } finally {
-          if (temporary) await this.cleanup(temporary).catch(() => {});
-        }
-        job.finishedAt = Date.now();
-        this.emit();
-      }
+      };
+      const concurrency = Math.max(
+        1,
+        Math.min(
+          this.jobs.length || 1,
+          Math.floor(this.options?.concurrency() ?? 1),
+        ),
+      );
+      await Promise.all(Array.from({ length: concurrency }, worker));
     } finally {
       this.running = false;
       this.emit();

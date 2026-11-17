@@ -5,6 +5,8 @@ import type {
   Job,
   PreviewResult,
 } from "../../../packages/core/src/index";
+import type { TinifyKeyStatus } from "../../../packages/engine/src/tinify-keys";
+export type { TinifyKeyStatus };
 export type DesktopAsset = Asset & { thumbnail?: string };
 export interface PlanSummary {
   id: string;
@@ -20,6 +22,14 @@ export interface PlanSummary {
   }[];
 }
 export interface DesktopApi {
+  tinifyKeys(): Promise<{
+    keys: TinifyKeyStatus[];
+    storageError?: string;
+    encrypted: boolean;
+  }>;
+  addTinifyKey(key: string): Promise<TinifyKeyStatus[]>;
+  removeTinifyKey(id: string): Promise<TinifyKeyStatus[]>;
+  tinifyResult(id: string): Promise<PreviewResult | undefined>;
   paths(): Promise<{ importDirectory?: string; outputDirectory?: string }>;
   setOutputDirectory(value: string): Promise<string | undefined>;
   capabilities(): Promise<CodecCapability[]>;

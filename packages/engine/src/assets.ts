@@ -4,7 +4,7 @@ import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
 import { capability, type Asset } from "../../core/src/index";
 import { inspectTexture, unwrapCcz } from "../../containers/src/index";
-const supported = /\.(png|jpe?g|webp|pkm|dds|pvr|ccz)$/i;
+const supported = /\.(png|jpe?g|webp|avif|jxl|heic|heif|pkm|dds|pvr|ccz)$/i;
 export class AssetService {
   readonly assets = new Map<string, Asset>();
   private seen = new Set<string>();
@@ -152,14 +152,28 @@ export class AssetService {
           alpha: capability(t.codec).channels.includes("A"),
         });
       } else {
+        const cloudOnly = /\.(jxl|heic|heif)$/i.test(file);
+        if (cloudOnly) {
+          const jxl =
+            data.subarray(0, 2).equals(Buffer.from([0xff, 0x0a])) ||
+            data.subarray(0, 12).toString("hex") === "0000000c4a584c200d0a870a";
+          const heic =
+            data.subarray(4, 8).toString() === "ftyp" &&
+            /heic|heix|hevc|hevx|mif1|msf1/.test(
+              data.subarray(8, 64).toString(),
+            );
+          if (!jxl && !heic) throw Error("图片格式签名无效");
+          asset.container = "image";
+          asset.localError = "此格式仅支持 TinyPNG 云端处理，本地预览不可用";
+          return asset;
+        }
         const metadata = await sharp(data, {
           limitInputPixels: 16384 * 16384,
         }).metadata();
-        if (
-          !["png", "jpeg", "webp"].includes(metadata.format ?? "") ||
-          (metadata.pages ?? 1) > 1
-        )
-          throw Error("只支持 PNG/JPEG/WebP 静态图片");
+        if (!["png", "jpeg", "webp", "heif"].includes(metadata.format ?? ""))
+          throw Error("不支持此图片格式");
+        if ((metadata.pages ?? 1) > 1)
+          asset.localError = "动画图片仅支持 TinyPNG 云端处理";
         const rotated = metadata.orientation && metadata.orientation >= 5;
         asset.width = (rotated ? metadata.height : metadata.width) ?? 0;
         asset.height = (rotated ? metadata.width : metadata.height) ?? 0;

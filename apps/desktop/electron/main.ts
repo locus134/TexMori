@@ -7,6 +7,7 @@ import {
   net,
   shell,
   utilityProcess,
+  safeStorage,
 } from "electron";
 import {
   access,
@@ -22,6 +23,7 @@ import { randomUUID, createHash } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import sharp from "sharp";
 import { AssetService } from "../../../packages/engine/src/assets";
 import { JobQueue, WorkScheduler } from "../../../packages/engine/src/queue";
 import { PreviewCache } from "../../../packages/engine/src/preview";
@@ -30,6 +32,12 @@ import {
   normalizeOutputDirectory,
 } from "../../../packages/engine/src/preferences";
 import { writeEncodingMetadata } from "../../../packages/engine/src/metadata";
+import { TinifyKeys } from "../../../packages/engine/src/tinify-keys";
+import {
+  TinifyPool,
+  TinifyError,
+  compressTinify,
+} from "../../../packages/engine/src/tinify";
 import type { ConversionResult } from "../../../packages/engine/src/conversion";
 import {
   capabilities,
@@ -67,6 +75,14 @@ const cache = new PreviewCache<Omit<PreviewResult, "version">>(),
   plans = new Map<string, PlannedOutput[]>();
 const activeWork = new Set<Promise<ConversionResult>>();
 let preferences: Preferences;
+let tinifyKeys: TinifyKeys;
+let tinifyPool: TinifyPool | undefined;
+let tinifyLoadError: string | undefined;
+let keyUpdate: Promise<unknown> = Promise.resolve();
+const secureKeyStorageAvailable = () =>
+  safeStorage.isEncryptionAvailable() &&
+  (process.platform !== "linux" ||
+    safeStorage.getSelectedStorageBackend() !== "basic_text");
 let outputUpdate: Promise<string | undefined> = Promise.resolve(undefined);
 function updateOutputDirectory(value: string) {
   outputUpdate = outputUpdate
@@ -109,7 +125,11 @@ function imageUrl(file: string) {
   return `texmori-preview://${token}/image`;
 }
 function displayAsset(asset: Asset): DesktopAsset {
-  if (asset.container === "image" && !thumbnails.has(asset.id))
+  if (
+    asset.container === "image" &&
+    !asset.localError &&
+    !thumbnails.has(asset.id)
+  )
     thumbnails.set(asset.id, imageUrl(asset.path));
   return { ...asset, thumbnail: thumbnails.get(asset.id) };
 }
@@ -123,6 +143,7 @@ async function work(
   preview = false,
 ): Promise<ConversionResult> {
   signal.throwIfAborted();
+  if (asset.localError) throw Error(asset.localError);
   const resolvedKeys = {
     input: keyFor(request.inputKeyRef),
     output: request.encrypt ? keyFor(request.outputKeyRef) : undefined,
@@ -196,7 +217,42 @@ const queue = new JobQueue(
     );
     if (current.fingerprint !== plan.asset.fingerprint)
       throw Error("输入文件已改变，请重新规划批处理");
-    return (await work(current, plan.request, signal)).path;
+    if (current.error) throw Error(current.error);
+    if (plan.request.operation === "tinify") {
+      if (!tinifyPool) throw Error("请先添加 TinyPNG API Key");
+      const directory = await mkdtemp(path.join(sessionDirectory, "tinify-"));
+      try {
+        return await tinifyPool.run(signal, async (key) => {
+          try {
+            const result = await compressTinify(
+              current.path,
+              directory,
+              plan.request.tinify!,
+              key,
+              signal,
+              (count) => tinifyKeys.update(key, { count, error: undefined }),
+            );
+            return {
+              ...result,
+              target: plan.target.endsWith(".auto")
+                ? plan.target.slice(0, -5) + "." + result.extension
+                : plan.target,
+            };
+          } catch (e) {
+            if (e instanceof TinifyError)
+              tinifyKeys.update(key, { error: e.message });
+            throw e;
+          }
+        });
+      } catch (e) {
+        await rm(directory, { recursive: true, force: true });
+        throw e;
+      }
+    }
+    return scheduler.run(
+      async () => (await work(current, plan.request, signal)).path,
+      signal,
+    );
   },
   scheduler,
   async (file) => {
@@ -205,7 +261,8 @@ const queue = new JobQueue(
       await rm(directory, { recursive: true, force: true });
   },
   async (plan, file, signal) => {
-    if (plan.request.container === "png") return undefined;
+    if (plan.request.container === "png" || plan.request.operation === "tinify")
+      return undefined;
     const codec =
       plan.request.operation === "encode"
         ? plan.request.codec
@@ -214,6 +271,7 @@ const queue = new JobQueue(
       ? writeEncodingMetadata(file, codec, plan.request.container, signal)
       : "未能确定编码格式，未写入备注";
   },
+  { concurrency: () => tinifyPool?.size ?? 1 },
 );
 queue.onChange = (jobs, running) => {
   if (!window?.isDestroyed())
@@ -274,6 +332,65 @@ async function existingFiles(directory: string): Promise<string[]> {
   return result;
 }
 async function setup() {
+  handle("tinify-result", async (id: unknown) => {
+    const asset = assets.get(idSchema.parse(id));
+    const job = queue.jobs.find(
+      (j) => j.assetId === asset.id && j.state === "succeeded",
+    );
+    if (
+      !job?.output ||
+      asset.localError ||
+      /\.(jxl|heic|heif)$/i.test(job.output)
+    )
+      return undefined;
+    const size = (await stat(job.output)).size;
+    const metadata = await sharp(job.output)
+      .metadata()
+      .catch(() => undefined);
+    if (!metadata?.width || !metadata.height) return undefined;
+    return {
+      version: 0,
+      original: imageUrl(asset.path),
+      result: imageUrl(job.output),
+      width: metadata.width,
+      height: metadata.height,
+      originalWidth: asset.width,
+      originalHeight: asset.height,
+      inputBytes: job.inputBytes ?? asset.size,
+      encodedBytes: size,
+      finalBytes: size,
+      payloadBytes: size,
+      bpp: 0,
+      inputLabel: "原图",
+    };
+  });
+  handle("tinify-keys", () => ({
+    keys: tinifyKeys.status(),
+    storageError: tinifyLoadError,
+    encrypted: secureKeyStorageAvailable(),
+  }));
+  const mutateKey = (action: () => Promise<void>) => {
+    if (queue.running) throw Error("处理期间不能修改 API Key");
+    const pending = keyUpdate
+      .catch(() => {})
+      .then(async () => {
+        if (queue.running) throw Error("处理期间不能修改 API Key");
+        if (tinifyLoadError) throw Error(tinifyLoadError);
+        if (!secureKeyStorageAvailable())
+          throw Error("系统安全存储不可用，无法保存 API Key");
+        await action();
+        plans.clear();
+        return tinifyKeys.status();
+      });
+    keyUpdate = pending;
+    return pending;
+  };
+  handle("tinify-add-key", (value: unknown) =>
+    mutateKey(() => tinifyKeys.add(z.string().max(256).parse(value))),
+  );
+  handle("tinify-remove-key", (id: unknown) =>
+    mutateKey(() => tinifyKeys.remove(idSchema.parse(id))),
+  );
   handle("capabilities", async () =>
     Promise.all(
       capabilities.map(async (c) => ({
@@ -308,6 +425,10 @@ async function setup() {
                 "jpg",
                 "jpeg",
                 "webp",
+                "avif",
+                "jxl",
+                "heic",
+                "heif",
                 "pkm",
                 "dds",
                 "pvr",
@@ -367,11 +488,14 @@ async function setup() {
     const assetId = idSchema.parse(id),
       request = validateRequest(raw),
       v = z.number().int().nonnegative().parse(version);
+    if (request.operation === "tinify")
+      throw Error("TinyPNG 请开始批处理，自动预览不会上传图片");
     previewController.abort();
     const controller = new AbortController();
     previewController = controller;
     const asset = await assets.refresh(assetId, keyFor(request.inputKeyRef));
-    if (asset.error) throw Error(asset.error);
+    if (asset.error || asset.localError)
+      throw Error(asset.error ?? asset.localError);
     const cacheKey = createHash("sha256")
       .update(asset.fingerprint + JSON.stringify(request))
       .digest("hex");
@@ -434,6 +558,10 @@ async function setup() {
     if (queue.running) throw Error("批处理正在运行");
     const request = validateRequest(raw),
       selected = idsSchema.parse(ids);
+    if (request.operation === "tinify") {
+      await keyUpdate;
+      if (!tinifyKeys.secrets().length) throw Error("请先添加 TinyPNG API Key");
+    }
     if (request.output.mode === "directory") await outputUpdate;
     if (!selected.length) throw Error("没有可处理的资源");
     const input = await Promise.all(
@@ -465,19 +593,30 @@ async function setup() {
       })),
     };
   });
-  handle("start", (token: unknown) => {
+  handle("start", async (token: unknown) => {
+    await keyUpdate;
     const id = idSchema.parse(token),
       items = plans.get(id);
     if (!items) throw Error("输出计划已失效，请重试");
     if (queue.running) throw Error("批处理正在运行");
     plans.delete(id);
     previewController.abort();
+    tinifyKeys.resetErrors();
+    tinifyPool =
+      items[0]?.request.operation === "tinify"
+        ? new TinifyPool(tinifyKeys.secrets())
+        : undefined;
     void queue.start(items);
   });
   handle("cancel", () => queue.cancel());
-  handle("retry", () => {
+  handle("retry", async () => {
+    await keyUpdate;
     if (queue.running) throw Error("批处理正在运行");
     previewController.abort();
+    if (tinifyPool) {
+      tinifyKeys.resetErrors();
+      tinifyPool = new TinifyPool(tinifyKeys.secrets());
+    }
     void queue.retryFailed();
   });
   handle("reveal", (id: unknown) => {
@@ -493,6 +632,13 @@ app.whenReady().then(async () => {
     path.join(app.getPath("userData"), "preferences.json"),
   );
   await preferences.load();
+  tinifyKeys = new TinifyKeys(
+    path.join(app.getPath("userData"), "tinify-keys.json"),
+    safeStorage,
+  );
+  await tinifyKeys.load().catch((e) => {
+    tinifyLoadError = e.message;
+  });
   outputDirectory = preferences.paths().outputDirectory;
   sessionDirectory = await mkdtemp(path.join(app.getPath("temp"), "texmori-"));
   protocol.handle("texmori-preview", (request) => {
@@ -563,6 +709,8 @@ app.on("before-quit", (event) => {
     queue.waitForIdle(),
     outputUpdate,
     preferences?.flush(),
+    keyUpdate,
+    tinifyKeys?.flush(),
     ...activeWork,
   ])
     .then(async () => {

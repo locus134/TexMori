@@ -4,6 +4,7 @@ import type {
 } from "../../../../packages/core/src/index";
 import { qualities } from "../../../../packages/core/src/capabilities";
 import { useState } from "react";
+import { TinifySettings } from "./TinifySettings";
 export function KeyInput({
   label,
   value,
@@ -57,6 +58,8 @@ export function KeyInput({
   );
 }
 export function SettingsPanel({
+  running,
+  onError,
   request,
   capabilities,
   onChange,
@@ -74,6 +77,8 @@ export function SettingsPanel({
   generateOutputKey,
   copyExample,
 }: {
+  running: boolean;
+  onError: (e: unknown) => void;
   request: ConversionRequest;
   capabilities: CodecCapability[];
   onChange: (p: Partial<ConversionRequest>) => void;
@@ -99,7 +104,9 @@ export function SettingsPanel({
     <aside className="settings-panel">
       <div className="panel-heading">
         <h2>输出设置</h2>
-        <span>本地处理</span>
+        <span>
+          {request.operation === "tinify" ? "TinyPNG 云端处理" : "本地处理"}
+        </span>
       </div>
       <section>
         <label>
@@ -116,6 +123,7 @@ export function SettingsPanel({
             <option value="encode">编码 / 重新编码</option>
             <option value="decode">解码为 PNG</option>
             <option value="rewrap">只换 PVR / CCZ 容器</option>
+            <option value="tinify">TinyPNG 压缩 / 格式转换</option>
           </select>
         </label>
         {encode && (
@@ -139,32 +147,34 @@ export function SettingsPanel({
             </select>
           </label>
         )}
-        <label>
-          输出容器
-          <select
-            aria-label="输出容器"
-            value={request.container}
-            disabled={request.operation === "decode"}
-            onChange={(e) =>
-              onChange({
-                container: e.target.value as ConversionRequest["container"],
-                encrypt: false,
-                outputKeyRef: undefined,
-              })
-            }
-          >
-            {(encode
-              ? (c?.containers ?? [])
-              : request.operation === "decode"
-                ? ["png"]
-                : ["pvr", "ccz"]
-            ).map((v) => (
-              <option key={v} value={v}>
-                {v === "ccz" ? "PVR.CCZ" : v.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
+        {request.operation !== "tinify" && (
+          <label>
+            输出容器
+            <select
+              aria-label="输出容器"
+              value={request.container}
+              disabled={request.operation === "decode"}
+              onChange={(e) =>
+                onChange({
+                  container: e.target.value as ConversionRequest["container"],
+                  encrypt: false,
+                  outputKeyRef: undefined,
+                })
+              }
+            >
+              {(encode
+                ? (c?.containers ?? [])
+                : request.operation === "decode"
+                  ? ["png"]
+                  : ["pvr", "ccz"]
+              ).map((v) => (
+                <option key={v} value={v}>
+                  {v === "ccz" ? "PVR.CCZ" : v.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {c && encode && (
           <div className="format-note">
             <span>{c.channels}</span>
@@ -173,6 +183,14 @@ export function SettingsPanel({
           </div>
         )}
       </section>
+      {request.operation === "tinify" && (
+        <TinifySettings
+          value={request.tinify ?? { formats: [], preserve: [] }}
+          onChange={(tinify) => onChange({ tinify })}
+          running={running}
+          onError={onError}
+        />
+      )}
       {encode && (
         <section>
           <h3>编码参数</h3>
@@ -342,15 +360,17 @@ export function SettingsPanel({
           )}
         </section>
       )}
-      <details>
-        <summary>加密输入</summary>
-        <KeyInput
-          label="输入解密密钥"
-          value={inputKey}
-          onChange={setInputKey}
-          onCommit={commitInputKey}
-        />
-      </details>
+      {request.operation !== "tinify" && (
+        <details>
+          <summary>加密输入</summary>
+          <KeyInput
+            label="输入解密密钥"
+            value={inputKey}
+            onChange={setInputKey}
+            onCommit={commitInputKey}
+          />
+        </details>
+      )}
       <section>
         <h3>输出位置</h3>
         <label>

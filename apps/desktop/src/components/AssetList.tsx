@@ -49,9 +49,11 @@ export function AssetList({
                 <span className="numeric">
                   {a.width
                     ? `${a.width} × ${a.height}`
-                    : a.encrypted
-                      ? "加密纹理"
-                      : "无法读取"}{" "}
+                    : a.container === "image" && a.localError
+                      ? "尺寸由服务端识别"
+                      : a.encrypted
+                        ? "加密纹理"
+                        : "无法读取"}{" "}
                   ·{" "}
                   {a.codec ??
                     (a.container === "image"
@@ -68,6 +70,9 @@ export function AssetList({
                 >
                   {job
                     ? stateLabels[job.state] +
+                      (job.outputBytes !== undefined && job.inputBytes
+                        ? ` · ${((job.outputBytes / job.inputBytes) * 100).toFixed(1)}% · ${job.outputBytes.toLocaleString()} B`
+                        : "") +
                       (job.warning ? " · 备注未保存" : "")
                     : (a.error ?? "待处理")}
                 </small>
@@ -79,7 +84,7 @@ export function AssetList({
       <div className="asset-hint">
         拖入文件或目录
         <br />
-        PNG · JPEG · WebP · PKM · DDS · PVR
+        PNG · JPEG · WebP · AVIF · JXL · HEIC · PKM · DDS · PVR
       </div>
     </aside>
   );

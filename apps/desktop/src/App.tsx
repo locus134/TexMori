@@ -63,7 +63,7 @@ export function App() {
   const effective = useMemo(
     () => ({
       ...request,
-      inputKeyRef: inputRef,
+      inputKeyRef: request.operation === "tinify" ? undefined : inputRef,
       outputKeyRef: request.encrypt ? outputRef : undefined,
     }),
     [request, inputRef, outputRef],
@@ -95,6 +95,22 @@ export function App() {
     }
     setPreviewState("stale");
     if (running) return;
+    if (effective.operation === "tinify") {
+      setPreview(undefined);
+      let live = true;
+      api
+        .tinifyResult(selected)
+        .then((result) => {
+          if (live) {
+            setPreview(result);
+            setPreviewState(result ? "current" : "empty");
+          }
+        })
+        .catch(fail);
+      return () => {
+        live = false;
+      };
+    }
     let live = true;
     const timer = setTimeout(() => {
       setPreviewState("loading");
@@ -158,10 +174,22 @@ export function App() {
   function change(p: Partial<ConversionRequest>) {
     setRequest((r) => {
       if (p.operation && p.operation !== r.operation) {
+        if (p.operation === "tinify")
+          return {
+            ...r,
+            ...p,
+            codec: undefined,
+            container: "png",
+            options: {},
+            sizeMode: "keep",
+            encrypt: false,
+            tinify: { formats: [], preserve: [] },
+          };
         if (p.operation === "encode")
           return {
             ...r,
             ...p,
+            tinify: undefined,
             codec: "etc2_rgba",
             container: "pkm",
             options: {},
@@ -170,6 +198,7 @@ export function App() {
         return {
           ...r,
           ...p,
+          tinify: undefined,
           codec: undefined,
           container: p.operation === "decode" ? "png" : "ccz",
           options: {},
@@ -297,7 +326,9 @@ export function App() {
         </div>
         <span className="engine-indicator">
           <i />
-          双内核 · 本地处理
+          {request.operation === "tinify"
+            ? "TinyPNG 云端处理"
+            : "双内核 · 本地处理"}
         </span>
       </header>
       <nav className="main-toolbar" aria-label="资源操作">
@@ -371,13 +402,17 @@ export function App() {
             >
               {scanning
                 ? "扫描中…"
-                : previewState === "current"
-                  ? "预览已更新"
-                  : previewState === "loading"
-                    ? "编码预览中"
-                    : asset
-                      ? "预览已过期"
-                      : "等待导入"}
+                : request.operation === "tinify" && previewState !== "current"
+                  ? "云端压缩 · 按需上传"
+                  : previewState === "current"
+                    ? request.operation === "tinify"
+                      ? "上次压缩结果"
+                      : "预览已更新"
+                    : previewState === "loading"
+                      ? "编码预览中"
+                      : asset
+                        ? "预览已过期"
+                        : "等待导入"}
             </span>
           </div>
           <PreviewCanvas
@@ -385,6 +420,17 @@ export function App() {
             stale={previewState === "stale"}
             loading={previewState === "loading"}
           />
+          {request.operation === "tinify" && !preview && (
+            <p className="tinify-preview-note">
+              {jobs.some(
+                (j) => j.assetId === selected && j.state === "succeeded",
+              )
+                ? "此图片暂不支持本地预览，可通过“显示输出”查看文件。"
+                : asset?.localError
+                  ? "本地预览不可用，仍可提交 TinyPNG 云端处理。"
+                  : "开始批处理后显示云端压缩结果"}
+            </p>
+          )}
           {!assets.length && (
             <div className="empty-import">
               <button className="primary" onClick={() => importFiles()}>
@@ -400,14 +446,21 @@ export function App() {
                   输入 <b>{bytes(preview.inputBytes)}</b>
                 </span>
                 <span>
-                  编码文件 <b>{bytes(preview.encodedBytes)}</b>
+                  {request.operation === "tinify" ? "压缩文件" : "编码文件"}{" "}
+                  <b>{bytes(preview.encodedBytes)}</b>
                 </span>
                 <span>
                   最终文件 <b>{bytes(preview.finalBytes)}</b>
                 </span>
                 <span>
-                  纹理载荷 <b>{bytes(preview.payloadBytes)}</b> · {preview.bpp}{" "}
-                  bpp
+                  {request.operation === "tinify" ? (
+                    "TinyPNG 压缩结果"
+                  ) : (
+                    <>
+                      纹理载荷 <b>{bytes(preview.payloadBytes)}</b> ·{" "}
+                      {preview.bpp} bpp
+                    </>
+                  )}
                 </span>
                 <span
                   className={
@@ -437,6 +490,8 @@ export function App() {
         </section>
         {showSettings && (
           <SettingsPanel
+            running={running}
+            onError={fail}
             request={request}
             capabilities={caps}
             onChange={change}
@@ -569,6 +624,16 @@ export function App() {
               : "自动重命名"}
           ”处理。
         </p>
+        {request.operation === "tinify" && (
+          <p className="warning">
+            图片将上传至 TinyPNG，并使用 API 额度。源图保留，输出文件名添加
+            .tiny 后缀。
+            {request.tinify?.formats.length ? "格式转换额外消耗压缩计数。" : ""}
+            {request.tinify?.resize
+              ? "尺寸调整额外消耗压缩计数。最终尺寸由服务端确定。"
+              : ""}
+          </p>
+        )}
         <div className="plan-list">
           {plan?.files.map((file) => (
             <div key={file.assetId} className="plan-row">
@@ -582,7 +647,7 @@ export function App() {
                 }
               >
                 {file.error ??
-                  `${file.width} × ${file.height}${file.alphaLoss ? " · 将丢失 Alpha" : ""}${file.exists ? " · 目标已存在" : ""}`}
+                  `${request.operation === "tinify" ? "最终尺寸与格式由服务端确定" : `${file.width} × ${file.height}`}${file.alphaLoss ? (request.operation === "tinify" ? " · 不透明输出将填充背景" : " · 将丢失 Alpha") : ""}${file.exists ? " · 目标已存在" : ""}`}
               </small>
             </div>
           ))}

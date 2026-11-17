@@ -4,6 +4,92 @@ import path from "node:path";
 import os from "node:os";
 import { JobQueue, WorkScheduler } from "../src/queue";
 import { validateRequest, type PlannedOutput } from "../../core/src/index";
+it("does not upload a cloud job when its target already exists and skip is selected", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tinify-skip-"));
+  try {
+    const target = path.join(dir, "a.tiny.png");
+    await writeFile(target, "keep");
+    let uploads = 0;
+    const queue = new JobQueue(
+      async () => {
+        uploads++;
+        throw Error("should not upload");
+      },
+      new WorkScheduler(),
+      undefined,
+      undefined,
+      { concurrency: () => 2 },
+    );
+    const plan = {
+      asset: { id: "a", name: "a.png" },
+      target,
+      request: validateRequest({
+        operation: "tinify",
+        container: "png",
+        output: { mode: "source", conflict: "skip" },
+      }),
+    } as PlannedOutput;
+    await queue.start([plan]);
+    expect(uploads).toBe(0);
+    expect(queue.jobs[0].state).toBe("skipped");
+    expect(await readFile(target, "utf8")).toBe("keep");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+it("runs cloud tasks concurrently, cancels all active tasks and leaves queued tasks unstarted", async () => {
+  let active = 0,
+    peak = 0,
+    started = 0;
+  let ready!: () => void;
+  const bothStarted = new Promise<void>((r) => (ready = r));
+  const queue = new JobQueue(
+    async (_plan, signal) => {
+      started++;
+      active++;
+      peak = Math.max(peak, active);
+      if (active === 2) ready();
+      try {
+        await new Promise<void>((_, reject) =>
+          signal.addEventListener("abort", () => reject(Error("cancelled")), {
+            once: true,
+          }),
+        );
+      } finally {
+        active--;
+      }
+      return "/never";
+    },
+    new WorkScheduler(),
+    undefined,
+    undefined,
+    { concurrency: () => 2 },
+  );
+  const plans = ["a", "b", "c"].map(
+    (id) =>
+      ({
+        asset: { id, name: id },
+        request: validateRequest({
+          operation: "decode",
+          container: "png",
+          output: { mode: "source", conflict: "skip" },
+        }),
+        target: "/never/" + id,
+      }) as PlannedOutput,
+  );
+  const done = queue.start(plans);
+  await bothStarted;
+  queue.cancel();
+  await done;
+  expect(peak).toBe(2);
+  expect(started).toBe(2);
+  expect(active).toBe(0);
+  expect(queue.jobs.map((j) => j.state)).toEqual([
+    "cancelled",
+    "cancelled",
+    "cancelled",
+  ]);
+});
 it("continues after a failed file and retries only failed jobs", async () => {
   const dir = await mkdtemp(
     path.join(

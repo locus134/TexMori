@@ -38,7 +38,8 @@ export interface EncodingOptions {
   premultiply?: boolean;
 }
 export interface ConversionRequest {
-  operation: "encode" | "decode" | "rewrap";
+  operation: "encode" | "decode" | "rewrap" | "tinify";
+  tinify?: import("./tinify").TinifyOptions;
   codec?: CodecId;
   container: Container;
   options: EncodingOptions;
@@ -70,6 +71,7 @@ export interface Asset {
   fingerprint: string;
   encrypted: boolean;
   error?: string;
+  localError?: string;
 }
 export type JobState =
   "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped";
@@ -92,6 +94,8 @@ export interface Job {
   output?: string;
   error?: string;
   warning?: string;
+  inputBytes?: number;
+  outputBytes?: number;
   startedAt?: number;
   finishedAt?: number;
 }

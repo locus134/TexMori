@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { capability, qualities } from "./capabilities";
 import type { ConversionRequest } from "./types";
+import { tinifySchema } from "./tinify";
 const schema = z
   .object({
-    operation: z.enum(["encode", "decode", "rewrap"]),
+    operation: z.enum(["encode", "decode", "rewrap", "tinify"]),
+    tinify: tinifySchema.optional(),
     codec: z.string().optional(),
     container: z.enum(["png", "pkm", "dds", "pvr", "ccz"]),
     options: z
@@ -35,6 +37,21 @@ const schema = z
 export function validateRequest(value: unknown): ConversionRequest {
   const r = schema.parse(value);
   const active = Object.keys(r.options);
+  if (r.operation === "tinify") {
+    if (
+      r.codec ||
+      active.length ||
+      r.encrypt ||
+      r.inputKeyRef ||
+      r.outputKeyRef ||
+      r.container !== "png" ||
+      r.sizeMode !== "keep"
+    )
+      throw Error("TinyPNG 压缩不能包含本地编码、加密或纹理参数");
+    r.tinify ??= tinifySchema.parse({});
+    return r as ConversionRequest;
+  }
+  if (r.tinify) throw Error("当前操作不支持 TinyPNG 参数");
   if (r.operation === "encode") {
     const c = capability(r.codec ?? "");
     if (!c.containers.includes(r.container)) throw Error("编码与容器不匹配");

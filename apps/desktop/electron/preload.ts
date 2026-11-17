@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { DesktopApi } from "../src/api";
 const api: DesktopApi = {
+  tinifyKeys: () => ipcRenderer.invoke("tinify-keys"),
+  addTinifyKey: (key) => ipcRenderer.invoke("tinify-add-key", key),
+  removeTinifyKey: (id) => ipcRenderer.invoke("tinify-remove-key", id),
+  tinifyResult: (id) => ipcRenderer.invoke("tinify-result", id),
   paths: () => ipcRenderer.invoke("paths"),
   setOutputDirectory: (value) => ipcRenderer.invoke("set-output", value),
   capabilities: () => ipcRenderer.invoke("capabilities"),

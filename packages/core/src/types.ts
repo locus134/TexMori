@@ -29,6 +29,7 @@ export interface CodecCapability {
   reason?: string;
 }
 export interface EncodingOptions {
+  multiplyRgbByAlpha?: boolean;
   dither?: boolean;
   heuristics?: boolean;
   mipmaps?: boolean;
@@ -90,6 +91,7 @@ export interface Job {
   state: JobState;
   output?: string;
   error?: string;
+  warning?: string;
   startedAt?: number;
   finishedAt?: number;
 }

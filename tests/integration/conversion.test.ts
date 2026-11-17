@@ -8,6 +8,74 @@ import { validateRequest, capabilities } from "../../packages/core/src/index";
 import { inspectTexture, unwrapCcz } from "../../packages/containers/src/index";
 import sharp from "sharp";
 const root = process.cwd();
+it("multiplies numeric RGB by Alpha only when enabled, preserving source pixels and Alpha", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-rgb-alpha-"));
+  try {
+    const file = path.join(dir, "source.png");
+    await sharp({
+      create: {
+        width: 32,
+        height: 32,
+        channels: 4,
+        background: { r: 200, g: 80, b: 20, alpha: 0.5 },
+      },
+    })
+      .png()
+      .toFile(file);
+    const assets = new AssetService(),
+      [asset] = await assets.import([file], new AbortController().signal);
+    const service = new ConversionService({
+      etcpak: path.join(root, "build/etcpak/etcpak"),
+      pvrtc: path.join(root, "build/engines/PVRTexToolCLI"),
+    });
+    for (const [codec, container] of [
+      ["etc1", "pkm"],
+      ["bc3", "dds"],
+      ["pvrtc1_rgba_4", "pvr"],
+    ] as const) {
+      for (const enabled of [false, true]) {
+        const outputDir = path.join(dir, codec + "-" + enabled);
+        const request = validateRequest({
+          operation: "encode",
+          codec,
+          container,
+          options: enabled ? { multiplyRgbByAlpha: true } : {},
+          output: { mode: "source", conflict: "skip" },
+        });
+        const result = await service.run(
+          asset,
+          request,
+          outputDir,
+          new AbortController().signal,
+          {},
+          true,
+        );
+        const pixels = await sharp(path.join(outputDir, "work.png"))
+          .ensureAlpha()
+          .raw()
+          .toBuffer();
+        expect([...pixels.subarray(0, 4)]).toEqual(
+          enabled ? [100, 40, 10, 128] : [200, 80, 20, 128],
+        );
+        const original = await sharp(result.originalPath)
+          .ensureAlpha()
+          .raw()
+          .toBuffer();
+        expect([...original.subarray(0, 4)]).toEqual([200, 80, 20, 128]);
+        if (codec === "bc3" && enabled) {
+          const decoded = await sharp(result.previewPath)
+            .ensureAlpha()
+            .raw()
+            .toBuffer();
+          expect(decoded[0]).toBeGreaterThan(85);
+          expect(decoded[0]).toBeLessThan(115);
+        }
+      }
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 it("encodes and decodes every real format, with valid ETC PKM and BC DDS", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-matrix-"));
   const assets = new AssetService();
@@ -166,22 +234,65 @@ it.each(["srgb", "linear"] as const)(
     }
   },
 );
-it('generates full mip chains and exercises every exposed PVRTC quality and mip filter',async()=>{
-  const dir=await mkdtemp(path.join(os.tmpdir(),'cptool-mips-'));
-  try{
-    const assets=new AssetService(),[asset]=await assets.import([path.join(root,'tests/fixtures/generated/rgba.png')],new AbortController().signal);
-    const service=new ConversionService({etcpak:path.join(root,'build/etcpak/etcpak'),pvrtc:path.join(root,'build/engines/PVRTexToolCLI')});
-    const {qualities}=await import('../../packages/core/src/index');
-    for(const quality of qualities){
-      const request=validateRequest({operation:'encode',codec:'pvrtc1_rgba_4',container:'pvr',options:{quality,mipmaps:true,mipFilter:'linear'},output:{mode:'source',conflict:'skip'}});
-      const result=await service.run(asset,request,path.join(dir,quality),new AbortController().signal);
+it("generates full mip chains and exercises every exposed PVRTC quality and mip filter", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cptool-mips-"));
+  try {
+    const assets = new AssetService(),
+      [asset] = await assets.import(
+        [path.join(root, "tests/fixtures/generated/rgba.png")],
+        new AbortController().signal,
+      );
+    const service = new ConversionService({
+      etcpak: path.join(root, "build/etcpak/etcpak"),
+      pvrtc: path.join(root, "build/engines/PVRTexToolCLI"),
+    });
+    const { qualities } = await import("../../packages/core/src/index");
+    for (const quality of qualities) {
+      const request = validateRequest({
+        operation: "encode",
+        codec: "pvrtc1_rgba_4",
+        container: "pvr",
+        options: { quality, mipmaps: true, mipFilter: "linear" },
+        output: { mode: "source", conflict: "skip" },
+      });
+      const result = await service.run(
+        asset,
+        request,
+        path.join(dir, quality),
+        new AbortController().signal,
+      );
       expect(inspectTexture(await readFile(result.path)).mipmaps).toBe(6);
     }
-    for(const mipFilter of ['nearest','cubic']){
-      const request=validateRequest({operation:'encode',codec:'pvrtc2_4',container:'pvr',options:{quality:'PVRTCFASTEST',mipmaps:true,mipFilter},output:{mode:'source',conflict:'skip'}});
-      const result=await service.run(asset,request,path.join(dir,mipFilter),new AbortController().signal);expect(inspectTexture(await readFile(result.path)).mipmaps).toBe(6);
+    for (const mipFilter of ["nearest", "cubic"]) {
+      const request = validateRequest({
+        operation: "encode",
+        codec: "pvrtc2_4",
+        container: "pvr",
+        options: { quality: "PVRTCFASTEST", mipmaps: true, mipFilter },
+        output: { mode: "source", conflict: "skip" },
+      });
+      const result = await service.run(
+        asset,
+        request,
+        path.join(dir, mipFilter),
+        new AbortController().signal,
+      );
+      expect(inspectTexture(await readFile(result.path)).mipmaps).toBe(6);
     }
-    const result=await service.run(asset,validateRequest({operation:'encode',codec:'bc3',container:'dds',options:{mipmaps:true},output:{mode:'source',conflict:'skip'}}),path.join(dir,'bc3'),new AbortController().signal);
+    const result = await service.run(
+      asset,
+      validateRequest({
+        operation: "encode",
+        codec: "bc3",
+        container: "dds",
+        options: { mipmaps: true },
+        output: { mode: "source", conflict: "skip" },
+      }),
+      path.join(dir, "bc3"),
+      new AbortController().signal,
+    );
     expect(inspectTexture(await readFile(result.path)).mipmaps).toBe(6);
-  }finally{await rm(dir,{recursive:true,force:true});}
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

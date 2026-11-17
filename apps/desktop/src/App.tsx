@@ -1,12 +1,14 @@
+import type {
+  CodecCapability,
+  ConversionRequest,
+  Job,
+  PreviewResult,
+} from "../../../packages/core/src/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   capability,
   targetDimensions,
-  type CodecCapability,
-  type ConversionRequest,
-  type Job,
-  type PreviewResult,
-} from "../../../packages/core/src/index";
+} from "../../../packages/core/src/capabilities";
 import type { DesktopAsset, PlanSummary } from "./api";
 import { AssetList } from "./components/AssetList";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -35,7 +37,7 @@ export function App() {
     [selected, setSelected] = useState<string>(),
     [caps, setCaps] = useState<CodecCapability[]>([]),
     [request, setRequest] = useState(initial),
-    [output, setOutput] = useState<string>();
+    [outputDraft, setOutputDraft] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]),
     [running, setRunning] = useState(false),
     [scanning, setScanning] = useState(false),
@@ -54,6 +56,7 @@ export function App() {
     [showList, setShowList] = useState(true),
     [showSettings, setShowSettings] = useState(true);
   const version = useRef(0),
+    outputRevision = useRef(0),
     saved = useRef(new Map<string, Partial<ConversionRequest>>()),
     review = useRef<HTMLDialogElement>(null);
   const asset = assets.find((a) => a.id === selected);
@@ -70,6 +73,13 @@ export function App() {
   useEffect(() => {
     api.capabilities().then(setCaps).catch(fail);
     api.assets().then(setAssets).catch(fail);
+    api
+      .paths()
+      .then((paths) => {
+        if (outputRevision.current === 0)
+          setOutputDraft(paths.outputDirectory ?? "");
+      })
+      .catch(fail);
     return api.onJobs(({ jobs, running }) => {
       setJobs(jobs);
       setRunning(running);
@@ -201,6 +211,7 @@ export function App() {
     setError("");
     setPlanning(true);
     try {
+      if (request.output.mode === "directory") await commitOutputDirectory();
       const result = await api.plan(
         assets.map((a) => a.id),
         effective,
@@ -211,6 +222,18 @@ export function App() {
     } finally {
       setPlanning(false);
     }
+  }
+  async function commitOutputDirectory() {
+    const revision = outputRevision.current;
+    const next = await api.setOutputDirectory(outputDraft);
+    if (revision === outputRevision.current) setOutputDraft(next ?? "");
+    return next;
+  }
+  async function chooseOutputDirectory() {
+    await commitOutputDirectory();
+    const next = await api.selectOutput();
+    outputRevision.current++;
+    setOutputDraft(next ?? "");
   }
   async function confirm() {
     if (!plan) return;
@@ -418,8 +441,13 @@ export function App() {
             capabilities={caps}
             onChange={change}
             onCodec={onCodec}
-            output={output}
-            onOutput={() => api.selectOutput().then(setOutput).catch(fail)}
+            output={outputDraft}
+            onOutput={() => void chooseOutputDirectory().catch(fail)}
+            onOutputDraft={(value) => {
+              outputRevision.current++;
+              setOutputDraft(value);
+            }}
+            onOutputBlur={() => void commitOutputDirectory().catch(fail)}
             inputKey={inputKey}
             setInputKey={(value) => {
               setInputKey(value);

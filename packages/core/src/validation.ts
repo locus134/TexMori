@@ -8,6 +8,7 @@ const schema = z
     container: z.enum(["png", "pkm", "dds", "pvr", "ccz"]),
     options: z
       .object({
+        multiplyRgbByAlpha: z.boolean().optional(),
         dither: z.boolean().optional(),
         heuristics: z.boolean().optional(),
         mipmaps: z.boolean().optional(),
@@ -38,7 +39,7 @@ export function validateRequest(value: unknown): ConversionRequest {
     const c = capability(r.codec ?? "");
     if (!c.containers.includes(r.container)) throw Error("编码与容器不匹配");
     if (c.available === false) throw Error(c.reason ?? "编码器不可用");
-    const allowed = ["mipmaps"];
+    const allowed = ["mipmaps", "multiplyRgbByAlpha"];
     if (["etc1", "bc1"].includes(c.id)) allowed.push("dither");
     if (["etc2_rgb", "etc2_rgba"].includes(c.id)) allowed.push("heuristics");
     if (c.engine === "pvrtc")
@@ -53,6 +54,8 @@ export function validateRequest(value: unknown): ConversionRequest {
       throw Error("Mipmap 滤镜需要先启用 Mipmap");
     if (r.options.premultiply && !c.channels.includes("A"))
       throw Error("当前编码不保留 Alpha");
+    if (r.options.multiplyRgbByAlpha && r.options.premultiply)
+      throw Error("RGB 乘以 Alpha 与 PVRTC 预乘不能同时启用，避免重复相乘");
   } else {
     if (r.codec || active.length) throw Error("解码和容器转换不能包含编码参数");
     if (r.operation === "decode" && r.container !== "png")

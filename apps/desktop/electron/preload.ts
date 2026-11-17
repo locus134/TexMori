@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { DesktopApi } from "../src/api";
 const api: DesktopApi = {
+  paths: () => ipcRenderer.invoke("paths"),
+  setOutputDirectory: (value) => ipcRenderer.invoke("set-output", value),
   capabilities: () => ipcRenderer.invoke("capabilities"),
   assets: () => ipcRenderer.invoke("assets"),
   importFiles: (directory = false) => ipcRenderer.invoke("import", directory),

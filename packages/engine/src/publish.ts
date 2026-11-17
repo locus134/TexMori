@@ -28,6 +28,7 @@ export async function publishFile(
   target: string,
   conflict: "skip" | "overwrite" | "rename",
   signal: AbortSignal,
+  decorate?: (temporary: string) => Promise<void>,
 ): Promise<boolean> {
   signal.throwIfAborted();
   await noSymlink(target);
@@ -38,6 +39,7 @@ export async function publishFile(
   );
   try {
     await copyFile(source, temporary);
+    if (decorate) await decorate(temporary);
     const fd = await open(temporary, "r+");
     try {
       await fd.sync();

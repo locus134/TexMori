@@ -2,7 +2,7 @@ import type {
   CodecCapability,
   ConversionRequest,
 } from "../../../../packages/core/src/index";
-import { qualities } from "../../../../packages/core/src/index";
+import { qualities } from "../../../../packages/core/src/capabilities";
 import { useState } from "react";
 export function KeyInput({
   label,
@@ -63,6 +63,8 @@ export function SettingsPanel({
   onCodec,
   output,
   onOutput,
+  onOutputDraft,
+  onOutputBlur,
   inputKey,
   setInputKey,
   commitInputKey,
@@ -78,6 +80,8 @@ export function SettingsPanel({
   onCodec: (id: string) => void;
   output?: string;
   onOutput: () => void;
+  onOutputDraft: (value: string) => void;
+  onOutputBlur: () => void;
   inputKey: string;
   setInputKey: (s: string) => void;
   commitInputKey: () => void;
@@ -172,6 +176,25 @@ export function SettingsPanel({
       {encode && (
         <section>
           <h3>编码参数</h3>
+          <label
+            className="check"
+            title="压缩前按通道执行 RGB × Alpha / 255，Alpha 保持不变，原文件不会修改"
+          >
+            <input
+              aria-label="压缩前 RGB 乘以 Alpha"
+              type="checkbox"
+              checked={!!request.options.multiplyRgbByAlpha}
+              onChange={(e) => {
+                const next = {
+                  ...request.options,
+                  multiplyRgbByAlpha: e.target.checked,
+                };
+                if (e.target.checked) delete next.premultiply;
+                onChange({ options: next });
+              }}
+            />
+            压缩前 RGB 乘以 Alpha
+          </label>
           {["etc1", "bc1"].includes(request.codec!) && (
             <label className="check">
               <input
@@ -244,9 +267,10 @@ export function SettingsPanel({
                   <input
                     type="checkbox"
                     checked={!!request.options.premultiply}
+                    disabled={!!request.options.multiplyRgbByAlpha}
                     onChange={(e) => option("premultiply", e.target.checked)}
                   />
-                  预乘 Alpha
+                  PVRTC 预乘 Alpha
                 </label>
               )}
             </>
@@ -349,12 +373,25 @@ export function SettingsPanel({
         </label>
         {request.output.mode === "directory" && (
           <>
+            <label>
+              目录路径
+              <input
+                aria-label="导出目录路径"
+                type="text"
+                value={output ?? ""}
+                placeholder="输入完整目录路径"
+                title={output}
+                spellCheck={false}
+                onChange={(e) => onOutputDraft(e.target.value)}
+                onBlur={onOutputBlur}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </label>
             <button className="full-width" onClick={onOutput}>
               选择输出目录
             </button>
-            <p className="path" title={output}>
-              {output ?? "尚未选择目录"}
-            </p>
           </>
         )}
         <label>

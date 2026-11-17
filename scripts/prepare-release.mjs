@@ -31,6 +31,13 @@ execFileSync("iconutil", [
   "build/icon.icns",
 ]);
 await mkdir("build/licenses", { recursive: true });
+execFileSync("lipo", [
+  "build/engines/PVRTexToolCLI",
+  "-thin",
+  "arm64",
+  "-output",
+  "build/engines/PVRTexToolCLI-arm64",
+]);
 await cp("etcpak/LICENSE.txt", "build/licenses/etcpak-LICENSE.txt");
 const tracy = "build/etcpak/.cpm-cache/tracy/462f/LICENSE";
 await cp(tracy, "build/licenses/Tracy-LICENSE.txt");
@@ -105,7 +112,7 @@ async function collect(directory) {
   }
 }
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
-for (const dep of Object.keys(pkg.dependencies))
+for (const dep of ["sharp", "react", "react-dom", "zod"])
   await collect(path.join("node_modules", dep));
 lines.push(
   "",
@@ -114,5 +121,7 @@ lines.push(
   "",
 );
 await writeFile("THIRD_PARTY_NOTICES.md", lines.join("\n"));
-await cp('apps/desktop/resources/licenses','build/licenses/legal-texts',{recursive:true});
+await cp("apps/desktop/resources/licenses", "build/licenses/legal-texts", {
+  recursive: true,
+});
 console.log(`Prepared icon and notices for ${seen.size} runtime packages.`);

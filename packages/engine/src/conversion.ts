@@ -223,6 +223,20 @@ export class ConversionService {
     const c = capability(request.codec!),
       dimensions = targetDimensions(ow, oh, c.id, request.sizeMode);
     let image = sharp(originalPath);
+    if (request.options.multiplyRgbByAlpha) {
+      const { data, info } = await image
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      for (let i = 0; i < data.length; i += 4) {
+        const alpha = data[i + 3];
+        for (let channel = 0; channel < 3; channel++)
+          data[i + channel] = Math.round((data[i + channel] * alpha) / 255);
+      }
+      image = sharp(data, {
+        raw: { width: info.width, height: info.height, channels: 4 },
+      });
+    }
     if (dimensions.width !== ow || dimensions.height !== oh) {
       if (request.sizeMode === "pad")
         image = image.extend({

@@ -1,7 +1,9 @@
 import { build } from "esbuild";
 import { build as viteBuild } from "vite";
 import react from "@vitejs/plugin-react";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
+const release = process.argv.includes("--release");
+await rm("dist/electron", { recursive: true, force: true });
 await mkdir("dist/electron", { recursive: true });
 await build({
   entryPoints: {
@@ -16,7 +18,8 @@ await build({
   outExtension: { ".js": ".cjs" },
   external: ["electron", "sharp"],
   target: "node22",
-  sourcemap: true,
+  sourcemap: !release,
+  minify: release,
 });
 await viteBuild({
   root: "apps/desktop",

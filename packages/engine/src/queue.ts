@@ -59,6 +59,11 @@ export class JobQueue {
     ) => Promise<string>,
     private scheduler: WorkScheduler,
     private cleanup: (file: string) => Promise<void> = async () => {},
+    private decorate?: (
+      plan: PlannedOutput,
+      file: string,
+      signal: AbortSignal,
+    ) => Promise<string | undefined>,
   ) {}
   private emit() {
     this.onChange(structuredClone(this.jobs), this.running);
@@ -120,6 +125,11 @@ export class JobQueue {
             plan.target,
             plan.request.output.conflict,
             signal,
+            this.decorate
+              ? async (file) => {
+                  job.warning = await this.decorate!(plan, file, signal);
+                }
+              : undefined,
           );
           job.state = published ? "succeeded" : "skipped";
           if (published) job.output = plan.target;

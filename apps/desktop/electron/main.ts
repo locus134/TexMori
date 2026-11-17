@@ -25,6 +25,11 @@ import { z } from "zod";
 import { AssetService } from "../../../packages/engine/src/assets";
 import { JobQueue, WorkScheduler } from "../../../packages/engine/src/queue";
 import { PreviewCache } from "../../../packages/engine/src/preview";
+import {
+  Preferences,
+  normalizeOutputDirectory,
+} from "../../../packages/engine/src/preferences";
+import { writeEncodingMetadata } from "../../../packages/engine/src/metadata";
 import type { ConversionResult } from "../../../packages/engine/src/conversion";
 import {
   capabilities,
@@ -61,6 +66,20 @@ const assets = new AssetService(),
 const cache = new PreviewCache<Omit<PreviewResult, "version">>(),
   plans = new Map<string, PlannedOutput[]>();
 const activeWork = new Set<Promise<ConversionResult>>();
+let preferences: Preferences;
+let outputUpdate: Promise<string | undefined> = Promise.resolve(undefined);
+function updateOutputDirectory(value: string) {
+  outputUpdate = outputUpdate
+    .catch(() => undefined)
+    .then(async () => {
+      const normalized = await normalizeOutputDirectory(value);
+      await preferences.update({ outputDirectory: normalized });
+      outputDirectory = normalized;
+      plans.clear();
+      return normalized;
+    });
+  return outputUpdate;
+}
 let window: BrowserWindow,
   sessionDirectory: string,
   outputDirectory: string | undefined,
@@ -185,6 +204,16 @@ const queue = new JobQueue(
     if (path.dirname(directory) === sessionDirectory)
       await rm(directory, { recursive: true, force: true });
   },
+  async (plan, file, signal) => {
+    if (plan.request.container === "png") return undefined;
+    const codec =
+      plan.request.operation === "encode"
+        ? plan.request.codec
+        : plan.asset.codec;
+    return codec
+      ? writeEncodingMetadata(file, codec, plan.request.container, signal)
+      : "未能确定编码格式，未写入备注";
+  },
 );
 queue.onChange = (jobs, running) => {
   if (!window?.isDestroyed())
@@ -216,6 +245,15 @@ async function scan(paths: string[]) {
   scanController.abort();
   const controller = new AbortController();
   scanController = controller;
+  if (paths[0]) {
+    const info = await stat(paths[0]).catch(() => undefined);
+    if (info)
+      await preferences.update({
+        importDirectory: info.isDirectory()
+          ? await realpath(paths[0])
+          : path.dirname(await realpath(paths[0])),
+      });
+  }
   try {
     await assets.import(paths, controller.signal, outputDirectory);
   } catch (e) {
@@ -255,6 +293,8 @@ async function setup() {
   handle("import", async (directory: unknown) => {
     const isDirectory = z.boolean().parse(directory);
     const r = await dialog.showOpenDialog(window, {
+      defaultPath:
+        preferences.paths().importDirectory ?? app.getPath("pictures"),
       properties: isDirectory
         ? ["openDirectory", "multiSelections"]
         : ["openFile", "multiSelections"],
@@ -289,12 +329,19 @@ async function setup() {
     return allAssets();
   });
   handle("select-output", async () => {
+    await outputUpdate;
     const r = await dialog.showOpenDialog(window, {
+      defaultPath:
+        preferences.paths().outputDirectory ?? app.getPath("documents"),
       properties: ["openDirectory", "createDirectory"],
     });
-    if (!r.canceled) outputDirectory = await realpath(r.filePaths[0]);
+    if (!r.canceled) await updateOutputDirectory(r.filePaths[0]);
     return outputDirectory;
   });
+  handle("paths", () => preferences.paths());
+  handle("set-output", (value: unknown) =>
+    updateOutputDirectory(z.string().max(32768).parse(value)),
+  );
   handle("set-key", (value: unknown) => {
     const key = z.string().max(256).parse(value);
     if (!key.trim()) return undefined;
@@ -387,6 +434,7 @@ async function setup() {
     if (queue.running) throw Error("批处理正在运行");
     const request = validateRequest(raw),
       selected = idsSchema.parse(ids);
+    if (request.output.mode === "directory") await outputUpdate;
     if (!selected.length) throw Error("没有可处理的资源");
     const input = await Promise.all(
       selected.map((id) => assets.refresh(id, keyFor(request.inputKeyRef))),
@@ -441,6 +489,11 @@ async function setup() {
   });
 }
 app.whenReady().then(async () => {
+  preferences = new Preferences(
+    path.join(app.getPath("userData"), "preferences.json"),
+  );
+  await preferences.load();
+  outputDirectory = preferences.paths().outputDirectory;
   sessionDirectory = await mkdtemp(path.join(app.getPath("temp"), "cptool-"));
   protocol.handle("cptool-preview", (request) => {
     const token = new URL(request.url).hostname,
@@ -506,7 +559,12 @@ app.on("before-quit", (event) => {
   queue.cancel();
   keys.clear();
   images.clear();
-  void Promise.allSettled([queue.waitForIdle(), ...activeWork])
+  void Promise.allSettled([
+    queue.waitForIdle(),
+    outputUpdate,
+    preferences?.flush(),
+    ...activeWork,
+  ])
     .then(async () => {
       if (sessionDirectory)
         await rm(sessionDirectory, { recursive: true, force: true });

@@ -58,8 +58,18 @@ export function AssetList({
                       ? "图片"
                       : a.container.toUpperCase())}
                 </span>
-                <small className={job?.state ?? (a.error ? "failed" : "")}>
-                  {job ? stateLabels[job.state] : (a.error ?? "待处理")}
+                <small
+                  className={
+                    job?.warning
+                      ? "warning"
+                      : (job?.state ?? (a.error ? "failed" : ""))
+                  }
+                  title={job?.warning ?? job?.error ?? a.error}
+                >
+                  {job
+                    ? stateLabels[job.state] +
+                      (job.warning ? " · 备注未保存" : "")
+                    : (a.error ?? "待处理")}
                 </small>
               </div>
             </button>

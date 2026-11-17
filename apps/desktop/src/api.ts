@@ -20,6 +20,8 @@ export interface PlanSummary {
   }[];
 }
 export interface DesktopApi {
+  paths(): Promise<{ importDirectory?: string; outputDirectory?: string }>;
+  setOutputDirectory(value: string): Promise<string | undefined>;
   capabilities(): Promise<CodecCapability[]>;
   assets(): Promise<DesktopAsset[]>;
   importFiles(directory?: boolean): Promise<DesktopAsset[]>;

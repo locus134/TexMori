@@ -1,17 +1,23 @@
 appId: com.cptool.desktop
 productName: CPTool
+electronLanguages:
+  - zh-CN
+  - zh-TW
+  - en-US
+compression: maximum
 directories:
   output: release
 files:
   - dist/**/*
   - package.json
+  - "!dist/**/*.map"
 asarUnpack:
-  - node_modules/sharp/**/*
-  - node_modules/@img/**/*
+  - "**/*.node"
+  - "**/*.dylib"
 extraResources:
   - from: build/etcpak/etcpak
     to: engines/etcpak
-  - from: build/engines/PVRTexToolCLI
+  - from: build/engines/PVRTexToolCLI-arm64
     to: engines/PVRTexToolCLI
   - from: build/engines/PowerVR-Tools-License.html
     to: licenses/PowerVR-Tools-License.html
@@ -24,7 +30,7 @@ extraResources:
 mac:
   category: public.app-category.developer-tools
   minimumSystemVersion: "13.0"
-  target: zip
+  target: dir
   icon: build/icon.icns
   identity: "-"
   hardenedRuntime: true

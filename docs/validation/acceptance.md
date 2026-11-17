@@ -1,4 +1,4 @@
-# CPTool 0.1.0 开发验收
+# CPTool 0.1.1 开发验收
 
 日期：2026-11-17。状态：功能开发版本可运行；正式发布关卡未全部完成，不归档实施计划和规格。
 
@@ -28,7 +28,7 @@ npm run package:mac
 node scripts/verify-bundle.mjs
 ```
 
-核心与集成测试当前 34 项；开发版与安装包各有两条桌面测试。当前执行输出保存在 `build/packaged-desktop.log`、`build/package.log`、`build/bundle-verification.json`；工作台截图在 `build/workbench.png` 与 `build/workbench-narrow.png`。这些是本地构建证据，不纳入源代码版本库。
+核心与集成测试当前 40 项；开发版与安装包各有三条桌面测试。当前执行输出保存在 `build/packaged-desktop.log`、`build/package.log`、`build/bundle-verification.json`；工作台截图在 `build/workbench.png` 与 `build/workbench-narrow.png`。这些是本地构建证据，不纳入源代码版本库。
 
 ## 发布仍待验证
 
@@ -57,3 +57,20 @@ node scripts/verify-bundle.mjs
 - ZIP：`release/CPTool-0.1.0-macOS-arm64.zip`（125.0 MiB）
 - SHA-256：`f9447c56ec3f564d97fe9146974fa4dc2d6e6e0b7764fda638695c1078a2c9a5`
 - 本次最终安装包：2/2 桌面流程、架构与依赖检查、ad-hoc 签名校验通过。
+
+## 0.1.1：压缩前 RGB 乘以 Alpha
+
+- 所有编码格式提供独立复选框，默认关闭；按 8 位通道数值执行 round(RGB × Alpha / 255)，Alpha 不变，不改原文件。
+- 预处理发生在尺寸处理与编码前，预览和批处理共用；不会写入预乘元数据后又被预览反预乘撤销。与 PVRTC 原生预乘选项互斥，后台也拒绝同时启用。
+- 真实 ETC、BC、PVRTC 工作图像素及 BC 解码结果通过回归测试；桌面测试覆盖默认关闭和勾选操作。
+
+## 0.1.1 最终交付（包含后续目录与瘦身要求）
+
+- DMG：`release/CPTool-0.1.1-macOS-arm64.dmg`，113.4 MiB，UDBZ 压缩。
+- SHA-256：`324086305eeec23181bce75cbddb004e6d34d67d2ec02455ec54ca04ec7f5048`。
+- 应用约 305.8 → 274.3 MiB；仅 arm64 编码器、中英文资源、所需原生运行库；不含构建调试映射或重复的前端运行依赖。
+- 40 项核心/集成测试、类型检查、三条打包应用桌面流程通过。增加独立目录记忆、重启恢复、输入非法目录阻止规划、目录修改立即开始和 Finder 编码元数据验证。
+- 输出先在目标临时文件写入 binary-plist Finder 备注及 com.cptool.codec/container 扩展属性，再原子发布；不改压缩文件字节，属性写入失败仅产生可见警告。
+- 最近存在的父目录先 realpath 规范化，再拼接新目录；界面与后台均等待当前路径提交，避免沿用旧目录。
+- DMG 校验和与镜像源应用签名通过；本执行环境拒绝挂载镜像，未声称在挂载卷内运行。打包应用在无开发工具 PATH 环境下三条流程通过。
+- 当前仍是本地 ad-hoc 签名，未公证；原有正式发布证据缺口继续保留。

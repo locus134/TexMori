@@ -1,6 +1,6 @@
 {
   "name": "cptool",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "本地纹理编码、预览与批处理工具",
@@ -13,13 +13,10 @@
     "dev": "npm run build && electron .",
     "test:integration": "vitest run tests/integration",
     "test:desktop": "playwright test",
-    "package:mac": "npm run build && node scripts/prepare-release.mjs && electron-builder --mac --arm64"
+    "package:mac": "node scripts/build.mjs --release && node scripts/prepare-release.mjs && electron-builder --mac dir --arm64 && node scripts/package-dmg.mjs"
   },
   "dependencies": {
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "sharp": "0.35.5",
-    "zod": "4.6.7"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "electron": "45.3.3",
@@ -32,7 +29,10 @@
     "esbuild": "0.28.2",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0"
+    "@types/react-dom": "19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
   },
   "overrides": {
     "minimatch@>=7.0.0 <11.0.1": "11.0.1"

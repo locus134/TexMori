@@ -1,9 +1,19 @@
 import { test, expect, _electron as electron } from "@playwright/test";
 import path from "node:path";
-import { mkdtemp, readFile, rm, realpath } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  rm,
+  realpath,
+  writeFile,
+  mkdir,
+  copyFile,
+} from "node:fs/promises";
+import { runProcess } from "../../packages/engine/src/process-runner";
 import os from "node:os";
-const launchApp = () =>
-  electron.launch(
+let preferenceBackup: { file: string; data: Buffer | undefined } | undefined;
+const launchApp = async () => {
+  const application = await electron.launch(
     process.env.CPTOOL_PACKAGED_PATH
       ? {
           executablePath: process.env.CPTOOL_PACKAGED_PATH,
@@ -12,6 +22,26 @@ const launchApp = () =>
         }
       : { args: ["."], cwd: process.cwd() },
   );
+  if (!preferenceBackup) {
+    const directory = await application.evaluate(({ app }) =>
+      app.getPath("userData"),
+    );
+    const file = path.join(directory, "preferences.json");
+    preferenceBackup = {
+      file,
+      data: await readFile(file).catch(() => undefined),
+    };
+  }
+  return application;
+};
+test.afterEach(async () => {
+  if (preferenceBackup) {
+    if (preferenceBackup.data)
+      await writeFile(preferenceBackup.file, preferenceBackup.data);
+    else await rm(preferenceBackup.file, { force: true });
+    preferenceBackup = undefined;
+  }
+});
 test("imports, previews actual ETC output, batches to a chosen folder and switches valid parameters", async () => {
   const output = await mkdtemp(
     path.join(await realpath(os.tmpdir()), "cptool-desktop-"),
@@ -37,6 +67,13 @@ test("imports, previews actual ETC output, batches to a chosen folder and switch
       timeout: 30000,
     });
     await expect(page.getByRole("img", { name: "编码结果" })).toBeVisible();
+    const multiply = page.getByRole("checkbox", {
+      name: "压缩前 RGB 乘以 Alpha",
+      exact: true,
+    });
+    await expect(multiply).not.toBeChecked();
+    await multiply.check();
+    await expect(multiply).toBeChecked();
     await page.getByRole("button", { name: "100%", exact: true }).click();
     const pixels = await page
       .getByRole("img", { name: "编码结果" })
@@ -70,12 +107,110 @@ test("imports, previews actual ETC output, batches to a chosen folder and switch
     expect(
       (await readFile(path.join(output, "rgba.pkm"))).subarray(0, 6).toString(),
     ).toBe("PKM 10");
+    expect(
+      (
+        await runProcess("/usr/bin/xattr", [
+          "-p",
+          "com.cptool.codec",
+          path.join(output, "rgba.pkm"),
+        ])
+      ).stdout.trim(),
+    ).toBe("etc1");
     await page.screenshot({ path: "build/workbench.png" });
     await page.setViewportSize({ width: 840, height: 680 });
     await page.screenshot({ path: "build/workbench-narrow.png" });
   } finally {
     await application.close();
     await rm(output, { recursive: true, force: true });
+  }
+});
+test("remembers import/export folders separately across restart and edits output above the picker button", async () => {
+  const directory = await mkdtemp(
+    path.join(await realpath(os.tmpdir()), "cptool-paths-desktop-"),
+  );
+  const input = path.join(directory, "导入 图片"),
+    output = path.join(directory, "导出 纹理");
+  await mkdir(input);
+  await mkdir(output);
+  await copyFile(
+    path.join(process.cwd(), "tests/fixtures/generated/rgba.png"),
+    path.join(input, "rgba.png"),
+  );
+  let application = await launchApp();
+  try {
+    let page = await application.firstWindow();
+    await expect(page.getByText("纹理工作台", { exact: true })).toBeVisible();
+    await application.evaluate(
+      ({ dialog }, file) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [file],
+        });
+      },
+      path.join(input, "rgba.png"),
+    );
+    await page.getByRole("button", { name: "导入图片" }).click();
+    await page.getByLabel("输出位置").selectOption("directory");
+    const field = page.getByRole("textbox", { name: "导出目录路径" });
+    await field.fill(output);
+    await field.press("Tab");
+    await expect
+      .poll(() => page.evaluate(() => window.cptool.paths()))
+      .toEqual({ importDirectory: input, outputDirectory: output });
+    const fieldBox = await field.boundingBox(),
+      buttonBox = await page
+        .getByRole("button", { name: "选择输出目录" })
+        .boundingBox();
+    expect(fieldBox!.y).toBeLessThan(buttonBox!.y);
+    await field.fill("relative path");
+    await page.getByRole("button", { name: "开始批处理" }).click();
+    await expect(page.getByRole("alert")).toContainText("完整");
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    const editedOutput = path.join(directory, "新建导出", "child");
+    await application.evaluate((_electron, target) => {
+      const fileSystem = process.getBuiltinModule("fs/promises")!,
+        original = fileSystem.stat;
+      fileSystem.stat = (async (...args: Parameters<typeof original>) => {
+        if (String(args[0]).startsWith(target))
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        return original(...args);
+      }) as typeof original;
+    }, editedOutput);
+    await field.fill(editedOutput);
+    await page.getByRole("button", { name: "开始批处理" }).click();
+    await expect(
+      page.getByRole("dialog").locator(".plan-row .path"),
+    ).toHaveAttribute("title", path.join(editedOutput, "rgba.pkm"));
+    await page.getByRole("button", { name: "确认并开始" }).click();
+    await expect(page.getByText("批处理完成", { exact: true })).toBeVisible();
+    expect(
+      (await readFile(path.join(editedOutput, "rgba.pkm")))
+        .subarray(0, 6)
+        .toString(),
+    ).toBe("PKM 20");
+    await application.close();
+    application = await launchApp();
+    page = await application.firstWindow();
+    await expect(page.getByText("纹理工作台", { exact: true })).toBeVisible();
+    await page.getByLabel("输出位置").selectOption("directory");
+    await expect(
+      page.getByRole("textbox", { name: "导出目录路径" }),
+    ).toHaveValue(editedOutput);
+    await application.evaluate(({ dialog }) => {
+      dialog.showOpenDialog = async (...args: unknown[]) => ({
+        canceled: false,
+        filePaths: [(args.at(-1) as { defaultPath: string }).defaultPath],
+      });
+    });
+    const restored = await page.evaluate(async () => ({
+      assets: await window.cptool.importFiles(true),
+      output: await window.cptool.selectOutput(),
+    }));
+    expect(restored.assets[0].path).toBe(path.join(input, "rgba.png"));
+    expect(restored.output).toBe(editedOutput);
+  } finally {
+    await application.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });
 test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewraps it", async () => {

@@ -7,6 +7,19 @@ const base = {
   options: {},
   output: { mode: "source", conflict: "skip" },
 };
+it("accepts RGB-by-Alpha preprocessing for ETC and rejects double premultiplication", () => {
+  expect(
+    validateRequest({ ...base, options: { multiplyRgbByAlpha: true } }).options,
+  ).toMatchObject({ multiplyRgbByAlpha: true });
+  expect(() =>
+    validateRequest({
+      ...base,
+      codec: "pvrtc1_rgba_4",
+      container: "pvr",
+      options: { multiplyRgbByAlpha: true, premultiply: true },
+    }),
+  ).toThrow(/重复/);
+});
 describe("conversion boundary", () => {
   it("offers all 16 real modes and prevents PKM mipmaps", () => {
     expect(capabilities).toHaveLength(16);

@@ -1,0 +1,47 @@
+{
+  "etcpak": {
+    "repository": "https://github.com/locus134/etcpak.git",
+    "commit": "3d716e1550023dc5ff8b602636af8b76584e0b66",
+    "tracyCommit": "5d542dc09f3d9378d005092a4ad446bd405f819a",
+    "libpng": "1.6.58",
+    "deploymentTarget": "12.0",
+    "architecture": "arm64",
+    "sha256": "ce8f07ee9621a55d0c8066f2d49588b9be590c5b771d0ff3da4e19a414da8228"
+  },
+  "pvrtc": {
+    "version": "5.5.0",
+    "sdk": "2023_R1",
+    "url": "https://pvr-sdk-live.s3.us-east-1.amazonaws.com/sdk/OFFLINE/PVRTexToolSetup-2023_R1.pkg",
+    "archiveSha256": "762eca3cd74869ba6e95266eec9cb7cfafb78431e2c953b0913c51591fb89805",
+    "binarySha256": "5d18e404cc064ba46018ad82cab3da9ce477ebf919194f5f3d194d825b6f9bf1",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "runtimeVerified": [
+      "arm64"
+    ],
+    "license": "PowerVR Tools Software EULA, bundled component redistribution subject to Section 2(b)",
+    "qualities": [
+      "PVRTCFASTEST",
+      "PVRTCFAST",
+      "PVRTCLOW",
+      "PVRTCNORMAL",
+      "PVRTCHIGH",
+      "PVRTCVERYHIGH",
+      "PVRTCTHOROUGH",
+      "PVRTCBEST"
+    ],
+    "mipFilters": [
+      "nearest",
+      "linear",
+      "cubic"
+    ]
+  },
+  "release": {
+    "architecture": "arm64",
+    "minimumMacOS": "12.0",
+    "minimumOSRuntimeVerified": false,
+    "cleanMachineVerified": false
+  }
+}

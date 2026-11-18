@@ -3,6 +3,7 @@ import path from "node:path";
 import sharp from "sharp";
 import {
   capability,
+  defaultQuality,
   targetDimensions,
   validateRequest,
   type Asset,
@@ -16,6 +17,7 @@ import {
   wrapCcz,
   unwrapCcz,
 } from "../../containers/src/index";
+import { extendedToPvr, writeBc7Ktx } from "../../containers/src/extended";
 import { runProcess } from "./process-runner";
 export interface EnginePaths {
   etcpak: string;
@@ -25,6 +27,7 @@ export interface ConversionResult {
   path: string;
   originalPath?: string;
   previewPath?: string;
+  originalOffset?: { left: number; top: number };
   width: number;
   height: number;
   encodedWidth: number;
@@ -48,6 +51,16 @@ export class ConversionService {
     directory: string,
     signal: AbortSignal,
   ): Promise<string> {
+    const initial = inspectTexture(bytes);
+    if (initial.container === "dds" && initial.codec.startsWith("pvrtc")) {
+      const pvr = makePvr(initial.codec, initial.width, initial.height, bytes.subarray(initial.dataOffset), initial.colorSpace);
+      pvr.writeUInt32LE(initial.mipmaps, 44);
+      pvr.writeUInt32LE(initial.premultiplied ? 2 : 0, 4);
+      return this.decode(pvr, directory, signal);
+    }
+    if (["astc", "ktx", "ktx2"].includes(initial.container)) {
+      return this.decode(extendedToPvr(bytes), directory, signal);
+    }
     const info = inspectTexture(bytes),
       input = path.join(directory, "decode-input.pvr"),
       output = path.join(directory, "decoded.png");
@@ -237,14 +250,22 @@ export class ConversionService {
         raw: { width: info.width, height: info.height, channels: 4 },
       });
     }
+    const anchor = request.padAnchor ?? "center";
+    const extraWidth = dimensions.width - ow, extraHeight = dimensions.height - oh;
+    const left = request.sizeMode !== "pad-pot" || anchor.includes("left") ? 0
+      : anchor.includes("right") ? extraWidth : Math.floor(extraWidth / 2);
+    const top = request.sizeMode !== "pad-pot" || anchor.startsWith("top") ? 0
+      : anchor.startsWith("bottom") ? extraHeight : Math.floor(extraHeight / 2);
     if (dimensions.width !== ow || dimensions.height !== oh) {
-      if (request.sizeMode === "pad")
+      if (request.sizeMode === "pad" || request.sizeMode === "pad-pot")
         image = image.extend({
-          top: 0,
-          left: 0,
-          right: dimensions.width - ow,
-          bottom: dimensions.height - oh,
-          extendWith: "copy",
+          top,
+          left,
+          right: extraWidth - left,
+          bottom: extraHeight - top,
+          ...(request.sizeMode === "pad-pot"
+            ? { background: { r: 0, g: 0, b: 0, alpha: 0 } }
+            : { extendWith: "copy" as const }),
         });
       else
         image = image.resize(dimensions.width, dimensions.height, {
@@ -254,16 +275,16 @@ export class ConversionService {
     }
     const work = path.join(directory, "work.png");
     await image.png().toFile(work);
-    const native = path.join(
+    let native = path.join(
       directory,
-      "encoded." + (request.container === "dds" ? "dds" : "pvr"),
+      "encoded." + (c.id.startsWith("bc") ? "dds" : "pvr"),
     );
     if (c.engine === "etcpak") {
       const args = [
         "-c",
         c.id,
         "-h",
-        request.container === "dds" ? "dds" : "pvr",
+        c.id.startsWith("bc") ? "dds" : "pvr",
       ];
       if (request.options.dither) args.push("-d");
       if (request.options.mipmaps) args.push("-m");
@@ -281,9 +302,9 @@ export class ConversionService {
         "-ics",
         request.colorSpace === "srgb" ? "sRGB" : "lRGB",
         "-f",
-        `${pvrFormats[c.id]},UBN,${request.colorSpace === "srgb" ? "sRGB" : "lRGB"}`,
+        `${c.id.startsWith("astc_") ? c.id.toUpperCase() : pvrFormats[c.id]},UBN,${request.colorSpace === "srgb" ? "sRGB" : "lRGB"}`,
         "-q",
-        request.options.quality ?? "PVRTCNORMAL",
+        request.options.quality ?? defaultQuality(c.id),
       ];
       if (request.options.mipmaps) args.push("-m");
       if (request.options.mipFilter)
@@ -292,6 +313,16 @@ export class ConversionService {
       await runProcess(this.engines.pvrtc, args, signal);
     }
     signal.throwIfAborted();
+    if (c.id.startsWith("bc") && request.container !== "dds") {
+      const normalized = path.join(directory, "encoded.pvr");
+      const source = await readFile(native);
+      const texture = inspectTexture(source);
+      const pvr = makePvr(c.id, texture.width, texture.height, source.subarray(texture.dataOffset), texture.colorSpace);
+      pvr.writeUInt32LE(texture.mipmaps, 44);
+      pvr.writeUInt32LE(texture.premultiplied ? 2 : 0, 4);
+      await writeFile(normalized, pvr);
+      native = normalized;
+    }
     const nativeBytes = await readFile(native),
       info = inspectTexture(nativeBytes);
     let final: Buffer = nativeBytes;
@@ -316,7 +347,13 @@ export class ConversionService {
       directory,
       "result." + (request.container === "ccz" ? "pvr.ccz" : request.container),
     );
-    await writeFile(file, final);
+    if (["astc", "ktx", "ktx2"].includes(request.container) || (request.container === "dds" && c.engine === "pvrtc")) {
+      if (c.id === "bc7" && ["ktx", "ktx2"].includes(request.container)) {
+        await writeFile(file, writeBc7Ktx(nativeBytes, request.container === "ktx2"));
+      } else await runProcess(this.engines.pvrtc, ["-i", native, "-o", file], signal);
+      final = await readFile(file);
+      inspectTexture(final);
+    } else await writeFile(file, final);
     let previewPath: string | undefined;
     if (preview) {
       const previewDirectory = path.join(directory, "preview");
@@ -333,6 +370,7 @@ export class ConversionService {
       path: file,
       originalPath,
       previewPath,
+      originalOffset: request.sizeMode === "pad-pot" ? { left, top } : undefined,
       width: resultInfo.width,
       height: resultInfo.height,
       encodedWidth: dimensions.width,

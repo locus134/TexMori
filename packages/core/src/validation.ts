@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { capability, qualities } from "./capabilities";
+import { capability, codecQualities } from "./capabilities";
 import type { ConversionRequest } from "./types";
 import { tinifySchema } from "./tinify";
 const schema = z
@@ -7,7 +7,7 @@ const schema = z
     operation: z.enum(["encode", "decode", "rewrap", "tinify"]),
     tinify: tinifySchema.optional(),
     codec: z.string().optional(),
-    container: z.enum(["png", "pkm", "dds", "pvr", "ccz"]),
+    container: z.enum(["png", "pkm", "dds", "pvr", "ccz", "astc", "ktx", "ktx2"]),
     options: z
       .object({
         multiplyRgbByAlpha: z.boolean().optional(),
@@ -20,7 +20,8 @@ const schema = z
       })
       .strict()
       .default({}),
-    sizeMode: z.enum(["keep", "pad", "resize"]).default("keep"),
+    sizeMode: z.enum(["keep", "pad", "pad-pot", "resize"]).default("keep"),
+    padAnchor: z.enum(["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"]).default("center"),
     colorSpace: z.enum(["srgb", "linear"]).default("srgb"),
     cczLevel: z.number().int().min(0).max(9).default(6),
     encrypt: z.boolean().default(false),
@@ -63,16 +64,18 @@ export function validateRequest(value: unknown): ConversionRequest {
       allowed.push("quality", "mipFilter", "premultiply");
     if (active.some((k) => !allowed.includes(k)))
       throw Error("包含当前编码不支持的参数");
-    if (r.container === "pkm" && r.options.mipmaps)
-      throw Error("PKM 不支持 Mipmap");
-    if (r.options.quality && !qualities.includes(r.options.quality))
+    if (["pkm", "astc"].includes(r.container) && r.options.mipmaps)
+      throw Error("当前容器不支持 Mipmap");
+    if (["astc", "ktx", "ktx2"].includes(r.container) && r.options.premultiply)
+      throw Error("当前容器不保存预乘 Alpha 标记，请使用 PVR / DDS");
+    if (r.options.quality && !codecQualities(c.id).includes(r.options.quality))
       throw Error("不支持的质量档位");
     if (r.options.mipFilter && !r.options.mipmaps)
       throw Error("Mipmap 滤镜需要先启用 Mipmap");
     if (r.options.premultiply && !c.channels.includes("A"))
       throw Error("当前编码不保留 Alpha");
     if (r.options.multiplyRgbByAlpha && r.options.premultiply)
-      throw Error("RGB 乘以 Alpha 与 PVRTC 预乘不能同时启用，避免重复相乘");
+      throw Error("RGB 乘以 Alpha 与编码器预乘不能同时启用，避免重复相乘");
   } else {
     if (r.codec || active.length) throw Error("解码和容器转换不能包含编码参数");
     if (r.operation === "decode" && r.container !== "png")

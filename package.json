@@ -1,6 +1,6 @@
 {
   "name": "texmori",
-  "version": "0.1.1",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "本地纹理编码、预览与批处理工具",
@@ -13,7 +13,8 @@
     "dev": "npm run build && electron .",
     "test:integration": "vitest run tests/integration",
     "test:desktop": "playwright test",
-    "package:mac": "node scripts/build.mjs --release && node scripts/prepare-release.mjs && electron-builder --mac dir --arm64 && node scripts/package-dmg.mjs"
+    "package:mac": "node scripts/build.mjs --release && node scripts/prepare-release.mjs && electron-builder --mac dir --arm64 && node scripts/package-dmg.mjs",
+    "test:finder": "node scripts/build-finder-integration.mjs && node scripts/test-finder-metadata.mjs"
   },
   "dependencies": {
     "sharp": "0.35.5"

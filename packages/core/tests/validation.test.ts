@@ -21,8 +21,8 @@ it("accepts RGB-by-Alpha preprocessing for ETC and rejects double premultiplicat
   ).toThrow(/重复/);
 });
 describe("conversion boundary", () => {
-  it("offers all 16 real modes and prevents PKM mipmaps", () => {
-    expect(capabilities).toHaveLength(16);
+  it("offers all real modes and prevents PKM mipmaps", () => {
+    expect(capabilities).toHaveLength(30);
     expect(() =>
       validateRequest({ ...base, options: { mipmaps: true } }),
     ).toThrow();

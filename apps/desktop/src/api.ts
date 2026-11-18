@@ -25,7 +25,7 @@ export interface DesktopApi {
   tinifyKeys(): Promise<{
     keys: TinifyKeyStatus[];
     storageError?: string;
-    encrypted: boolean;
+    storageNotice?: string;
   }>;
   addTinifyKey(key: string): Promise<TinifyKeyStatus[]>;
   removeTinifyKey(id: string): Promise<TinifyKeyStatus[]>;

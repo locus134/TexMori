@@ -1,5 +1,19 @@
-export type Container = "png" | "pkm" | "dds" | "pvr" | "ccz";
+export type Container = "png" | "pkm" | "dds" | "pvr" | "ccz" | "astc" | "ktx" | "ktx2";
 export type CodecId =
+  | "astc_4x4"
+  | "astc_5x4"
+  | "astc_5x5"
+  | "astc_6x5"
+  | "astc_6x6"
+  | "astc_8x5"
+  | "astc_8x6"
+  | "astc_8x8"
+  | "astc_10x5"
+  | "astc_10x6"
+  | "astc_10x8"
+  | "astc_10x10"
+  | "astc_12x10"
+  | "astc_12x12"
   | "etc1"
   | "etc2_r"
   | "etc2_rg"
@@ -20,6 +34,8 @@ export interface CodecCapability {
   id: CodecId;
   label: string;
   engine: "etcpak" | "pvrtc";
+  blockWidth?: number;
+  blockHeight?: number;
   channels: string;
   bpp: number;
   containers: Container[];
@@ -43,7 +59,8 @@ export interface ConversionRequest {
   codec?: CodecId;
   container: Container;
   options: EncodingOptions;
-  sizeMode: "keep" | "pad" | "resize";
+  sizeMode: "keep" | "pad" | "pad-pot" | "resize";
+  padAnchor?: "top-left" | "top" | "top-right" | "left" | "center" | "right" | "bottom-left" | "bottom" | "bottom-right";
   colorSpace: "srgb" | "linear";
   cczLevel: number;
   encrypt: boolean;
@@ -100,6 +117,7 @@ export interface Job {
   finishedAt?: number;
 }
 export interface PreviewResult {
+  originalOffset?: { left: number; top: number };
   version: number;
   original: string;
   result: string;

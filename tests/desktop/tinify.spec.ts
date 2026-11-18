@@ -1,13 +1,15 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, rm, readFile, copyFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, copyFile, writeFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+const launchIsolated = (dir: string) => electron.launch({
+  executablePath: process.env.TEXMORI_PACKAGED_PATH,
+  args: process.env.TEXMORI_PACKAGED_PATH ? ["--user-data-dir=" + dir] : [".", "--user-data-dir=" + dir],
+  cwd: process.cwd(),
+});
 test("shows real Tinify options and batches through the key pool without automatic uploads", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "texmori-tinify-ui-"));
-  const app = await electron.launch({
-    args: [".", "--user-data-dir=" + dir],
-    cwd: process.cwd(),
-  });
+  const app = await launchIsolated(dir);
   try {
     await app.evaluate(
       ({ dialog }, input) => {
@@ -93,8 +95,8 @@ test("shows real Tinify options and batches through the key pool without automat
       ),
     ).toBe(1);
     expect(
-      await readFile(path.join(dir, "tinify-keys.json"), "utf8"),
-    ).not.toContain("test-only-key");
+      await readFile(path.join(dir, "tinify-keys-local.json"), "utf8"),
+    ).toContain("test-only-key");
     await page.screenshot({ path: "build/tinify-workbench.png" });
   } finally {
     await app.close();
@@ -194,4 +196,24 @@ test("two unique keys process three files in parallel and publish the chosen for
     await app.close();
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("keeps legacy encrypted records untouched and persists local keys across restart",async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),"texmori-local-keys-ui-"));
+ const legacy=JSON.stringify([{id:"legacy",encrypted:"test-ciphertext-not-a-real-key"}]);
+ await writeFile(path.join(dir,"tinify-keys.json"),legacy);
+ let app=await launchIsolated(dir);
+ try{
+  let page=await app.firstWindow();await page.getByLabel("操作",{exact:true}).selectOption("tinify");
+  await expect(page.getByText(/旧版 Key 使用系统加密保存/)).toBeVisible();
+  await page.getByLabel("新的 TinyPNG API Key").fill("test-only-local-key");
+  await page.getByRole("button",{name:"添加 API Key",exact:true}).click();
+  await expect(page.getByText("Key 1 · •••• -key",{exact:true})).toBeVisible();
+  expect(await readFile(path.join(dir,"tinify-keys.json"),"utf8")).toBe(legacy);
+  expect((await stat(path.join(dir,"tinify-keys-local.json"))).mode & 0o777).toBe(0o600);
+  await app.close();app=await launchIsolated(dir);
+  page=await app.firstWindow();await page.getByLabel("操作",{exact:true}).selectOption("tinify");
+  await expect(page.getByText("Key 1 · •••• -key",{exact:true})).toBeVisible();
+  await expect(page.getByText(/旧版 Key 使用系统加密保存/)).toHaveCount(0);
+ }finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });

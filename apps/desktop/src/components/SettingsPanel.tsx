@@ -2,8 +2,8 @@ import type {
   CodecCapability,
   ConversionRequest,
 } from "../../../../packages/core/src/index";
-import { qualities } from "../../../../packages/core/src/capabilities";
-import { useState } from "react";
+import { codecFamily, codecQualities, defaultQuality, codecLabel, containerLabel } from "../../../../packages/core/src/capabilities";
+import { Fragment, useState } from "react";
 import { TinifySettings } from "./TinifySettings";
 export function KeyInput({
   label,
@@ -134,15 +134,18 @@ export function SettingsPanel({
               value={request.codec}
               onChange={(e) => onCodec(e.target.value)}
             >
-              {capabilities.map((c) => (
+              {capabilities.map((c, index) => (
+                <Fragment key={c.id}>
+                {index > 0 && codecFamily(c) !== codecFamily(capabilities[index - 1]) && <hr />}
                 <option
                   key={c.id}
                   value={c.id}
                   disabled={c.available === false}
                 >
-                  {c.label}
+                  {codecLabel(c)}
                   {c.available === false ? " · 不可用" : ""}
                 </option>
+                </Fragment>
               ))}
             </select>
           </label>
@@ -169,16 +172,18 @@ export function SettingsPanel({
                   : ["pvr", "ccz"]
               ).map((v) => (
                 <option key={v} value={v}>
-                  {v === "ccz" ? "PVR.CCZ" : v.toUpperCase()}
+                  {containerLabel(v)}
                 </option>
               ))}
             </select>
           </label>
         )}
+        {encode && request.container === "astc" && <small>.astc 仅保存单层纹理，不记录 sRGB / Linear，加载时需指定色彩空间。</small>}
+        {encode && request.container === "dds" && c?.id.startsWith("pvrtc") && <small>PVRTC 的 DDS 使用 PowerVR 扩展，加载器需支持 PTC2 / PTC4。</small>}
         {c && encode && (
           <div className="format-note">
             <span>{c.channels}</span>
-            <span>{c.bpp} bpp</span>
+            <span>{Number(c.bpp.toFixed(2))} bpp</span>
             <span>{c.engine === "pvrtc" ? "PVRTexTool" : "etcpak"}</span>
           </div>
         )}
@@ -237,13 +242,13 @@ export function SettingsPanel({
           <label
             className="check"
             title={
-              request.container === "pkm" ? "PKM 只能保存单层纹理" : undefined
+              ["pkm", "astc"].includes(request.container) ? "PKM 只能保存单层纹理" : undefined
             }
           >
             <input
               aria-label="Mipmap"
               type="checkbox"
-              disabled={request.container === "pkm"}
+              disabled={["pkm", "astc"].includes(request.container)}
               checked={!!request.options.mipmaps}
               onChange={(e) => {
                 const next = { ...request.options, mipmaps: e.target.checked };
@@ -251,7 +256,7 @@ export function SettingsPanel({
                 onChange({ options: next });
               }}
             />
-            Mipmap{request.container === "pkm" && <small>PKM 不支持</small>}
+            Mipmap{["pkm", "astc"].includes(request.container) && <small>当前容器不支持</small>}
           </label>
           {c?.engine === "pvrtc" && (
             <>
@@ -259,10 +264,10 @@ export function SettingsPanel({
                 质量
                 <select
                   aria-label="质量"
-                  value={request.options.quality ?? "PVRTCNORMAL"}
+                  value={request.options.quality ?? defaultQuality(c.id)}
                   onChange={(e) => option("quality", e.target.value)}
                 >
-                  {qualities.map((q) => (
+                  {codecQualities(c.id).map((q) => (
                     <option key={q}>{q}</option>
                   ))}
                 </select>
@@ -280,7 +285,7 @@ export function SettingsPanel({
                   </select>
                 </label>
               )}
-              {c.channels.includes("A") && (
+              {c.channels.includes("A") && !["astc", "ktx", "ktx2"].includes(request.container) && (
                 <label className="check">
                   <input
                     type="checkbox"
@@ -288,7 +293,7 @@ export function SettingsPanel({
                     disabled={!!request.options.multiplyRgbByAlpha}
                     onChange={(e) => option("premultiply", e.target.checked)}
                   />
-                  PVRTC 预乘 Alpha
+                  编码器预乘 Alpha
                 </label>
               )}
             </>
@@ -321,9 +326,35 @@ export function SettingsPanel({
             >
               <option value="keep">保持尺寸</option>
               <option value="pad">边缘复制补齐</option>
+              <option value="pad-pot">透明扩展至 POT（2 的幂）</option>
               <option value="resize">缩放至合法尺寸</option>
             </select>
           </label>
+          {request.sizeMode === "pad-pot" && (
+            <div>
+              <fieldset className="pot-anchor" aria-describedby="pot-anchor-help">
+                <legend>画布对齐</legend>
+                <div className="pot-anchor-grid">
+                  {([
+                    ["top-left", "左上", "↖"], ["top", "上中", "↑"], ["top-right", "右上", "↗"],
+                    ["left", "左中", "←"], ["center", "居中", "●"], ["right", "右中", "→"],
+                    ["bottom-left", "左下", "↙"], ["bottom", "下中", "↓"], ["bottom-right", "右下", "↘"],
+                  ] as const).map(([value, label, symbol]) => (
+                    <label key={value} title={label}>
+                      <input type="radio" name="pot-anchor" aria-label={label}
+                        checked={(request.padAnchor ?? "center") === value}
+                        onChange={() => onChange({ padAnchor: value })} />
+                      <span aria-hidden="true">{symbol}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            <small id="pot-anchor-help">
+              按所选方向对齐，新增区域透明填充，不缩放。输出宽高向上扩展至 2 的幂。
+              {c && !c.channels.includes("A") && "当前编码不保留 Alpha，填充区域将不透明。"}
+            </small>
+            </div>
+          )}
         </section>
       )}
       {request.container === "ccz" && (

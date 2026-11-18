@@ -1,5 +1,17 @@
 import type { CodecCapability, CodecId } from "./types";
+const astcBlocks = [[4, 4], [5, 4], [5, 5], [6, 5], [6, 6], [8, 5], [8, 6], [8, 8], [10, 5], [10, 6], [10, 8], [10, 10], [12, 10], [12, 12]] as const;
 export const capabilities: CodecCapability[] = [
+  ...astcBlocks.map(([width, height], index): CodecCapability => ({
+    id: `astc_${width}x${height}` as CodecId,
+    label: `ASTC ${width}×${height} RGBA`,
+    engine: "pvrtc",
+    channels: "RGBA",
+    bpp: 128 / (width * height),
+    blockWidth: width,
+    blockHeight: height,
+    containers: ["pvr", "ccz"],
+    pvrFormat: 27 + index,
+  })),
   {
     id: "etc1",
     label: "ETC1 RGB",
@@ -150,6 +162,20 @@ export const capabilities: CodecCapability[] = [
     pvrFormat: 5,
   },
 ];
+for (const c of capabilities) {
+  if (!c.containers.includes("pvr")) c.containers.push("pvr", "ccz");
+  c.containers.push("ktx");
+  if (c.id !== "etc1") c.containers.push("ktx2");
+  if (c.id.startsWith("astc_")) c.containers.push("astc");
+  // Legacy PowerVR DDS stores PVRTC1 using PTC2 / PTC4 FourCC codes.
+  if (c.id.startsWith("pvrtc1")) c.containers.push("dds");
+}
+export function codecLabel(c: CodecCapability) {
+  return c.label.replace(/ \d+bpp$/, "") + " (" + Number(c.bpp.toFixed(2)) + "bpp)";
+}
+export function containerLabel(container: string) {
+  return container === "ccz" ? "PVR.CCZ (.pvr.ccz)" : container.toUpperCase() + " (." + container + ")";
+}
 export const qualities = [
   "PVRTCFASTEST",
   "PVRTCFAST",
@@ -160,6 +186,17 @@ export const qualities = [
   "PVRTCTHOROUGH",
   "PVRTCBEST",
 ];
+export const astcQualities = ["ASTCVERYFAST", "ASTCFAST", "ASTCMEDIUM", "ASTCTHOROUGH", "ASTCEXHAUSTIVE"];
+export function codecFamily(c: CodecCapability): string {
+  return c.label.match(/^[A-Z]+/)?.[0] ?? c.label;
+}
+capabilities.sort((a, b) => codecFamily(a).localeCompare(codecFamily(b), "en") || a.label.localeCompare(b.label, "en", { numeric: true }));
+export function codecQualities(id: CodecId | string) {
+  return id.startsWith("astc_") ? astcQualities : qualities;
+}
+export function defaultQuality(id: CodecId | string) {
+  return id.startsWith("astc_") ? "ASTCMEDIUM" : "PVRTCNORMAL";
+}
 export function capability(id: CodecId | string) {
   const result = capabilities.find((c) => c.id === id);
   if (!result) throw Error("不支持的编码格式");
@@ -169,7 +206,7 @@ export function targetDimensions(
   width: number,
   height: number,
   id: CodecId,
-  mode: "keep" | "pad" | "resize",
+  mode: "keep" | "pad" | "pad-pot" | "resize",
 ) {
   if (
     !Number.isInteger(width) ||
@@ -183,13 +220,22 @@ export function targetDimensions(
   const c = capability(id);
   let w = width,
     h = height;
-  if (id.startsWith("pvrtc1")) {
+  if (c.blockWidth && c.blockHeight) {
+    if (mode === "pad" || mode === "resize") {
+      w = Math.ceil(width / c.blockWidth) * c.blockWidth;
+      h = Math.ceil(height / c.blockHeight) * c.blockHeight;
+    }
+  } else if (id.startsWith("pvrtc1")) {
     w = 2 ** Math.ceil(Math.log2(Math.max(width, c.bpp === 2 ? 16 : 8)));
     h = 2 ** Math.ceil(Math.log2(Math.max(height, 8)));
   } else {
     const blockW = c.engine === "pvrtc" && c.bpp === 2 ? 8 : 4;
     w = Math.ceil(width / blockW) * blockW;
     h = Math.ceil(height / 4) * 4;
+  }
+  if (mode === "pad-pot") {
+    w = 2 ** Math.ceil(Math.log2(w));
+    h = 2 ** Math.ceil(Math.log2(h));
   }
   if (mode === "keep" && (w !== width || h !== height))
     throw Error(

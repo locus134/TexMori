@@ -7,10 +7,6 @@ export interface TinifyKeyStatus {
   count?: number;
   error?: string;
 }
-interface Cipher {
-  encryptString(value: string): Buffer;
-  decryptString(value: Buffer): string;
-}
 export class TinifyKeys {
   private entries: {
     id: string;
@@ -19,10 +15,7 @@ export class TinifyKeys {
     error?: string;
   }[] = [];
   private pending: Promise<void> = Promise.resolve();
-  constructor(
-    private file: string,
-    private cipher: Cipher,
-  ) {}
+  constructor(private file: string) {}
   async load() {
     try {
       const rows: unknown = JSON.parse(await readFile(this.file, "utf8"));
@@ -32,12 +25,10 @@ export class TinifyKeys {
         if (
           !row ||
           typeof row.id !== "string" ||
-          typeof row.encrypted !== "string"
+          typeof row.key !== "string"
         )
           throw Error("密钥文件格式无效");
-        const key = this.cipher.decryptString(
-          Buffer.from(row.encrypted, "base64"),
-        );
+        const key = row.key;
         if (!/^[\x21-\x7e]{8,256}$/.test(key)) throw Error("密钥格式无效");
         return { id: row.id, key };
       });
@@ -46,7 +37,7 @@ export class TinifyKeys {
       );
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "ENOENT")
-        throw Error("无法解密已保存的 TinyPNG API Key，请检查系统钥匙串");
+        throw Error("无法读取已保存的 TinyPNG API Key，请检查本地存储文件");
     }
   }
   status(): TinifyKeyStatus[] {
@@ -88,7 +79,7 @@ export class TinifyKeys {
     const data = JSON.stringify(
       entries.map((e) => ({
         id: e.id,
-        encrypted: this.cipher.encryptString(e.key).toString("base64"),
+        key: e.key,
       })),
     );
     this.pending = this.pending

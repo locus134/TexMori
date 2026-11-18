@@ -14,6 +14,9 @@ files:
 asarUnpack:
   - "**/*.node"
   - "**/*.dylib"
+extraFiles:
+  - from: build/finder-integration/TexMoriTexture.mdimporter
+    to: Library/Spotlight/TexMoriTexture.mdimporter
 extraResources:
   - from: build/etcpak/etcpak
     to: engines/etcpak
@@ -28,6 +31,37 @@ extraResources:
   - from: config/engines.lock.json
     to: engines/engines.lock.json
 mac:
+  extendInfo:
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: Compressed Texture
+        CFBundleTypeRole: None
+        LSItemContentTypes:
+          - com.texmori.pkm
+          - com.texmori.pvr
+          - com.texmori.dds
+          - com.texmori.ccz
+    UTExportedTypeDeclarations:
+      - UTTypeIdentifier: com.texmori.pkm
+        UTTypeDescription: PKM texture
+        UTTypeConformsTo: [public.image]
+        UTTypeTagSpecification:
+          public.filename-extension: [pkm]
+          public.mime-type: image/x-pkm
+      - UTTypeIdentifier: com.texmori.pvr
+        UTTypeDescription: PVR texture
+        UTTypeConformsTo: [public.image]
+        UTTypeTagSpecification:
+          public.filename-extension: [pvr]
+      - UTTypeIdentifier: com.texmori.dds
+        UTTypeDescription: DDS texture
+        UTTypeConformsTo: [public.image]
+        UTTypeTagSpecification:
+          public.filename-extension: [dds]
+      - UTTypeIdentifier: com.texmori.ccz
+        UTTypeDescription: CCZ texture
+        UTTypeConformsTo: [public.image]
+        UTTypeTagSpecification:
+          public.filename-extension: [ccz]
   category: public.app-category.developer-tools
   minimumSystemVersion: "13.0"
   target: dir

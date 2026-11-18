@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   app,
   BrowserWindow,
@@ -7,7 +9,6 @@ import {
   net,
   shell,
   utilityProcess,
-  safeStorage,
 } from "electron";
 import {
   access,
@@ -18,6 +19,9 @@ import {
   rm,
   stat,
   readFile,
+  writeFile,
+  cp,
+  rename,
 } from "node:fs/promises";
 import { randomUUID, createHash } from "node:crypto";
 import path from "node:path";
@@ -74,15 +78,13 @@ const assets = new AssetService(),
 const cache = new PreviewCache<Omit<PreviewResult, "version">>(),
   plans = new Map<string, PlannedOutput[]>();
 const activeWork = new Set<Promise<ConversionResult>>();
+let finderRegistration: Promise<void> = Promise.resolve();
 let preferences: Preferences;
 let tinifyKeys: TinifyKeys;
 let tinifyPool: TinifyPool | undefined;
 let tinifyLoadError: string | undefined;
+let tinifyStorageNotice: string | undefined;
 let keyUpdate: Promise<unknown> = Promise.resolve();
-const secureKeyStorageAvailable = () =>
-  safeStorage.isEncryptionAvailable() &&
-  (process.platform !== "linux" ||
-    safeStorage.getSelectedStorageBackend() !== "basic_text");
 let outputUpdate: Promise<string | undefined> = Promise.resolve(undefined);
 function updateOutputDirectory(value: string) {
   outputUpdate = outputUpdate
@@ -367,7 +369,7 @@ async function setup() {
   handle("tinify-keys", () => ({
     keys: tinifyKeys.status(),
     storageError: tinifyLoadError,
-    encrypted: secureKeyStorageAvailable(),
+    storageNotice: tinifyStorageNotice,
   }));
   const mutateKey = (action: () => Promise<void>) => {
     if (queue.running) throw Error("处理期间不能修改 API Key");
@@ -376,8 +378,6 @@ async function setup() {
       .then(async () => {
         if (queue.running) throw Error("处理期间不能修改 API Key");
         if (tinifyLoadError) throw Error(tinifyLoadError);
-        if (!secureKeyStorageAvailable())
-          throw Error("系统安全存储不可用，无法保存 API Key");
         await action();
         plans.clear();
         return tinifyKeys.status();
@@ -429,6 +429,9 @@ async function setup() {
                 "jxl",
                 "heic",
                 "heif",
+                "astc",
+                "ktx",
+                "ktx2",
                 "pkm",
                 "dds",
                 "pvr",
@@ -534,6 +537,7 @@ async function setup() {
               height: result.height,
               originalWidth: asset.width,
               originalHeight: asset.height,
+              originalOffset: result.originalOffset,
               inputBytes: asset.size,
               encodedBytes: result.encodedBytes,
               finalBytes: result.finalBytes,
@@ -628,14 +632,49 @@ async function setup() {
   });
 }
 app.whenReady().then(async () => {
+  if (process.platform === "darwin" && app.isPackaged) {
+    const bundle = path.dirname(path.dirname(process.resourcesPath));
+    const marker = path.join(app.getPath("userData"), "finder-registration.json");
+    const registration = JSON.stringify({ bundle, version: app.getVersion() });
+    // Reimport only after installation, relocation or an app update.
+    finderRegistration = (async () => {
+      if (await readFile(marker, "utf8").catch(() => "") === registration &&
+          await access(path.join(app.getPath("home"), "Library/Spotlight/TexMoriTexture.mdimporter")).then(() => true, () => false)) return;
+      const run = promisify(execFile);
+      await run(
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+        ["-f", bundle], { timeout: 15000 },
+      );
+      const spotlight = path.join(app.getPath("home"), "Library/Spotlight");
+      const importer = path.join(spotlight, "TexMoriTexture.mdimporter");
+      const staging = path.join(spotlight, ".texmori-importer-" + randomUUID());
+      await mkdir(spotlight, { recursive: true });
+      const backup = staging + ".backup";
+      let saved = false;
+      try {
+        await cp(path.join(bundle, "Contents/Library/Spotlight/TexMoriTexture.mdimporter"), staging, { recursive: true });
+        try { await rename(importer, backup); saved = true; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        try { await rename(staging, importer); }
+        catch (error) { if (saved) { await rename(backup, importer); saved = false; } throw error; }
+        if (saved) { await rm(backup, { recursive: true, force: true }); saved = false; }
+      } finally {
+        await rm(staging, { recursive: true, force: true });
+      }
+      await run("/usr/bin/mdimport", ["-r", importer], { timeout: 15000 });
+      await mkdir(path.dirname(marker), { recursive: true });
+      await writeFile(marker, registration);
+    })().catch(() => {});
+  }
   preferences = new Preferences(
     path.join(app.getPath("userData"), "preferences.json"),
   );
   await preferences.load();
-  tinifyKeys = new TinifyKeys(
-    path.join(app.getPath("userData"), "tinify-keys.json"),
-    safeStorage,
-  );
+  const localKeysFile = path.join(app.getPath("userData"), "tinify-keys-local.json");
+  if (!(await access(localKeysFile).then(() => true, () => false)) &&
+      await access(path.join(app.getPath("userData"), "tinify-keys.json")).then(() => true, () => false))
+    tinifyStorageNotice = "旧版 Key 使用系统加密保存，请重新添加一次；旧记录已保留，不会访问钥匙串。";
+  tinifyKeys = new TinifyKeys(localKeysFile);
   await tinifyKeys.load().catch((e) => {
     tinifyLoadError = e.message;
   });
@@ -706,6 +745,7 @@ app.on("before-quit", (event) => {
   keys.clear();
   images.clear();
   void Promise.allSettled([
+    finderRegistration,
     queue.waitForIdle(),
     outputUpdate,
     preferences?.flush(),

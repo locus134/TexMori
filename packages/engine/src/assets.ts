@@ -4,7 +4,7 @@ import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
 import { capability, type Asset } from "../../core/src/index";
 import { inspectTexture, unwrapCcz } from "../../containers/src/index";
-const supported = /\.(png|jpe?g|webp|avif|jxl|heic|heif|pkm|dds|pvr|ccz)$/i;
+const supported = /\.(png|jpe?g|webp|avif|jxl|heic|heif|pkm|dds|pvr|ccz|astc|ktx|ktx2)$/i;
 export class AssetService {
   readonly assets = new Map<string, Asset>();
   private seen = new Set<string>();
@@ -145,6 +145,7 @@ export class AssetService {
       } else if (
         sig === "PKM " ||
         sig === "DDS " ||
+        /\.(astc|ktx|ktx2)$/i.test(file) ||
         (data.length >= 4 && data.readUInt32LE(0) === 0x03525650)
       ) {
         const t = inspectTexture(data);

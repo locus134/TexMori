@@ -18,7 +18,7 @@ export function TinifySettings({
     [draft, setDraft] = useState(""),
     [busy, setBusy] = useState(false),
     [storageError, setStorageError] = useState(""),
-    [encrypted, setEncrypted] = useState(true);
+    [storageNotice, setStorageNotice] = useState("");
   const [convert, setConvert] = useState(value.formats.length > 0);
   useEffect(() => {
     let live = true;
@@ -28,7 +28,7 @@ export function TinifySettings({
         if (live) {
           setKeys(state.keys);
           setStorageError(state.storageError ?? "");
-          setEncrypted(state.encrypted);
+          setStorageNotice(state.storageNotice ?? "");
         }
       })
       .catch(onError);
@@ -73,9 +73,9 @@ export function TinifySettings({
             {storageError}
           </p>
         )}
-        {!encrypted && (
+        {storageNotice && keys.length === 0 && (
           <p role="alert" className="warning">
-            系统安全存储不可用，暂时无法添加 Key。
+            {storageNotice}
           </p>
         )}
         <ul className="tinify-key-list">
@@ -111,7 +111,7 @@ export function TinifySettings({
             maxLength={256}
             autoComplete="off"
             spellCheck={false}
-            disabled={running || busy || !encrypted || !!storageError}
+            disabled={running || busy || !!storageError}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && draft.trim() && !busy) void add();
@@ -120,13 +120,13 @@ export function TinifySettings({
         </label>
         <button
           disabled={
-            running || busy || !draft.trim() || !encrypted || !!storageError
+            running || busy || !draft.trim() || !!storageError
           }
           onClick={() => void add()}
         >
           {busy ? "保存中…" : "添加 API Key"}
         </button>
-        <small>通过系统安全存储加密保存在本机，仅显示末四位。</small>
+        <small>明文保存在本机应用数据目录，仅当前用户可读写；界面仅显示末四位。</small>
       </section>
       <section className="tinify-settings">
         <h3>云端压缩参数</h3>

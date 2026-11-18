@@ -20,6 +20,7 @@ const initial: ConversionRequest = {
   container: "pkm",
   options: {},
   sizeMode: "keep",
+  padAnchor: "center",
   colorSpace: "srgb",
   cczLevel: 6,
   encrypt: false,
@@ -162,14 +163,16 @@ export function App() {
       });
     const c = capability(id),
       previous = saved.current.get(id);
-    setRequest((r) => ({
-      ...r,
-      codec: c.id,
-      container: previous?.container ?? c.containers[0],
-      options: previous?.options ?? {},
-      encrypt: false,
-      outputKeyRef: undefined,
-    }));
+    setRequest((r) => {
+      const container = c.containers.includes(r.container) ? r.container : previous?.container ?? c.containers[0];
+      const options = { ...previous?.options };
+      if (["pkm", "astc"].includes(container)) {
+        delete options.mipmaps;
+        delete options.mipFilter;
+      }
+      if (["astc", "ktx", "ktx2"].includes(container)) delete options.premultiply;
+      return { ...r, codec: c.id, container, options, encrypt: false, outputKeyRef: undefined };
+    });
   }
   function change(p: Partial<ConversionRequest>) {
     setRequest((r) => {
@@ -204,6 +207,15 @@ export function App() {
           options: {},
           encrypt: false,
         };
+      }
+      if (p.container) {
+        const options = { ...r.options, ...p.options };
+        if (["pkm", "astc"].includes(p.container)) {
+          delete options.mipmaps;
+          delete options.mipFilter;
+        }
+        if (["astc", "ktx", "ktx2"].includes(p.container)) delete options.premultiply;
+        return { ...r, ...p, options };
       }
       return { ...r, ...p };
     });

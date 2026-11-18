@@ -9,6 +9,7 @@ import {
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import sharp from "sharp";
+await import('./build-finder-integration.mjs');
 await mkdir("build/icon.iconset", { recursive: true });
 for (const size of [16, 32, 64, 128, 256, 512, 1024]) {
   const image = await sharp("apps/desktop/resources/icon.svg")

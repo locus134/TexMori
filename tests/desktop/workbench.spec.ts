@@ -327,3 +327,76 @@ test("encrypts real PVRTC CCZ, imports it with a session key, decodes and rewrap
     await rm(output, { recursive: true, force: true });
   }
 });
+
+test("expands to POT with nine canvas anchors and exports the visible canvas dimensions", async()=>{
+ const output=await mkdtemp(path.join(await realpath(os.tmpdir()),"texmori-pot-ui-"));
+ const application=await launchApp();
+ try{
+  const page=await application.firstWindow();
+  await application.evaluate(async({dialog},input)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});},path.join(process.cwd(),"tests/fixtures/generated/odd.png"));
+  await page.getByRole("button",{name:"导入图片"}).click();
+  await expect(page.getByRole("heading",{name:"odd.png",exact:true})).toBeVisible();
+  await page.getByLabel("尺寸处理",{exact:true}).selectOption("pad-pot");
+  await expect(page.getByRole("radio",{name:"居中",exact:true})).toBeChecked();
+  for(const name of ["左上","上中","右上","左中","居中","右中","左下","下中","右下"]){
+   const radio=page.getByRole("radio",{name,exact:true});await radio.check();await expect(radio).toBeChecked();
+  }
+  await expect(page.getByText("预览已更新",{exact:true})).toBeVisible({timeout:30000});
+  await page.getByLabel("输出位置").selectOption("directory");
+  await application.evaluate(async({dialog},directory)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[directory]});},output);
+  await page.getByRole("button",{name:"选择输出目录"}).click();
+  await expect(page.getByText("预览已更新",{exact:true})).toBeVisible({timeout:30000});
+  await page.screenshot({path:"build/pot-anchor-workbench.png"});
+  await page.getByRole("button",{name:"开始批处理"}).click();
+  await page.getByRole("button",{name:"确认并开始"}).click();
+  await expect(page.getByText("批处理完成",{exact:true})).toBeVisible({timeout:30000});
+  const file=await readFile(path.join(output,"odd.pkm"));
+  expect(file.readUInt16BE(12)).toBe(16);expect(file.readUInt16BE(14)).toBe(16);
+ }finally{await application.close();await rm(output,{recursive:true,force:true});}
+});
+
+test("groups formats alphabetically with separators and previews ASTC", async () => {
+  const application = await launchApp();
+  try {
+    const page = await application.firstWindow();
+    const select = page.getByLabel("编码格式", {exact:true});
+    await expect(select.locator("option")).toHaveCount(30);
+    await expect(select.locator("hr")).toHaveCount(4);
+    const families = await select.locator("option").evaluateAll(nodes => [...new Set(nodes.map(n => n.textContent!.match(/^[A-Z]+/)![0]))]);
+    expect(families).toEqual(["ASTC","BC","EAC","ETC","PVRTC"]);
+    await select.selectOption("astc_6x6");
+    await expect(page.getByLabel("质量",{exact:true})).toHaveValue("ASTCMEDIUM");
+    await page.getByLabel("质量",{exact:true}).selectOption("ASTCVERYFAST");
+    await application.evaluate(async ({dialog}, input) => { dialog.showOpenDialog = async () => ({canceled:false,filePaths:[input]}); }, path.join(process.cwd(),"tests/fixtures/generated/odd.png"));
+    await page.getByRole("button",{name:"导入图片"}).click();
+    await expect(page.getByText("预览已更新",{exact:true})).toBeVisible({timeout:30000});
+    await expect(page.getByRole("img",{name:"编码结果"})).toBeVisible();
+    await page.screenshot({path:"build/astc-workbench.png"});
+    await select.selectOption("pvrtc1_rgba_4");
+    await expect(page.getByLabel("质量",{exact:true})).toHaveValue("PVRTCNORMAL");
+    await select.selectOption("astc_6x6");
+    await expect(page.getByLabel("质量",{exact:true})).toHaveValue("ASTCVERYFAST");
+  } finally { await application.close(); }
+});
+
+test("refreshes compatible containers and shows extensions and bpp", async () => {
+ const app=await launchApp();
+ try {
+  const page=await app.firstWindow(),codec=page.getByLabel("编码格式",{exact:true}),container=page.getByLabel("输出容器",{exact:true});
+  await codec.selectOption("astc_6x6");
+  await expect(codec.locator("option:checked")).toHaveText("ASTC 6×6 RGBA (3.56bpp)");
+  await expect(container.locator("option")).toHaveText(["PVR (.pvr)","PVR.CCZ (.pvr.ccz)","KTX (.ktx)","KTX2 (.ktx2)","ASTC (.astc)"]);
+  await page.getByLabel("Mipmap",{exact:false}).check();
+  await container.selectOption("astc");
+  await expect(page.getByLabel("Mipmap",{exact:false})).toBeDisabled();
+  await expect(page.getByLabel("Mipmap",{exact:false})).not.toBeChecked();
+  await container.selectOption("ktx2");
+  await codec.selectOption("bc1");
+  await expect(container).toHaveValue("ktx2");
+  await expect(codec.locator("option:checked")).toHaveText("BC1 RGB (4bpp)");
+  await expect(container.locator('option[value="astc"]')).toHaveCount(0);
+  await codec.selectOption("etc1");
+  await expect(container).toHaveValue("pkm");
+  await expect(container.locator('option[value="ktx2"]')).toHaveCount(0);
+ } finally {await app.close();}
+});

@@ -47,20 +47,31 @@ export function PreviewCanvas({
     return () => observer.disconnect();
   }, [preview, mode]);
   const scale = zoom === "fit" ? fit : zoom / window.devicePixelRatio;
-  const image = (src: string, label: string, w: number, h: number) => (
-    <img
-      src={src}
-      alt={label}
-      draggable={false}
-      className="texture-image"
+  const image = (src: string, label: string, w: number, h: number, original = false) => {
+    // Both images use the encoded canvas as their coordinate system. Apply the
+    // actual encoder offset, including its rounding for odd padding amounts.
+    const placement = original ? preview?.originalOffset : undefined;
+    const dx = placement && preview ? placement.left + w / 2 - preview.width / 2 : 0;
+    const dy = placement && preview ? placement.top + h / 2 - preview.height / 2 : 0;
+    return (
+    <div
+      className="texture-frame checker"
       style={{
         width: w,
         height: h,
-        transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})`,
-        filter: channel === "RGBA" ? "none" : `url(#channel-${channel})`,
+        transform: `translate(${offset.x + dx * scale}px,${offset.y + dy * scale}px) scale(${scale})`,
       }}
-    />
-  );
+    >
+      <img
+        src={src}
+        alt={label}
+        draggable={false}
+        className="texture-image"
+        style={{ filter: channel === "RGBA" ? "none" : `url(#channel-${channel})` }}
+      />
+    </div>
+    );
+  };
   return (
     <div className="preview-workspace">
       <div className="preview-toolbar">
@@ -186,7 +197,7 @@ export function PreviewCanvas({
       >
         {preview ? (
           <>
-            <div className="preview-pane checker">
+            <div className="preview-pane">
               <span className="pane-label">
                 {preview.inputLabel}
                 <span className="numeric">
@@ -198,10 +209,11 @@ export function PreviewCanvas({
                 preview.inputLabel,
                 preview.originalWidth,
                 preview.originalHeight,
+                true,
               )}
             </div>
             <div
-              className={"preview-pane checker result-pane"}
+              className={"preview-pane result-pane"}
               style={
                 mode === "slide"
                   ? { clipPath: `inset(0 0 0 ${divider}%)` }
@@ -233,7 +245,9 @@ export function PreviewCanvas({
             {preview.width !== preview.originalWidth ||
             preview.height !== preview.originalHeight ? (
               <span className="dimension-warning">
-                画布尺寸已改变；图像分别以中心对齐
+                {preview.originalOffset
+                  ? "画布尺寸已改变；原图按扩展位置对齐"
+                  : "画布尺寸已改变；图像分别以中心对齐"}
               </span>
             ) : null}
           </>

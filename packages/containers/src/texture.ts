@@ -1,6 +1,7 @@
+import { isExtendedTexture, inspectExtended } from "./extended";
 import { capabilities, capability, type CodecId } from "../../core/src/index";
 export interface TextureInfo {
-  container: "pkm" | "pvr" | "dds";
+  container: "pkm" | "pvr" | "dds" | "astc" | "ktx" | "ktx2";
   codec: CodecId;
   width: number;
   height: number;
@@ -25,6 +26,8 @@ function dimensions(w: number, h: number, mips = 1) {
 }
 export function levelBytes(codec: CodecId, w: number, h: number) {
   const c = capability(codec);
+  if (c.blockWidth && c.blockHeight)
+    return Math.ceil(w / c.blockWidth) * Math.ceil(h / c.blockHeight) * 16;
   if (codec.startsWith("pvrtc1"))
     return (Math.max(w, c.bpp === 2 ? 16 : 8) * Math.max(h, 8) * c.bpp) / 8;
   const bw = c.engine === "pvrtc" && c.bpp === 2 ? 8 : 4;
@@ -112,6 +115,7 @@ export function pkmToPvr(data: Buffer) {
   return makePvr(i.codec, i.encodedWidth, i.encodedHeight, data.subarray(16));
 }
 export function inspectTexture(data: Buffer): TextureInfo {
+  if (isExtendedTexture(data)) return inspectExtended(data);
   if (data.subarray(0, 4).toString() === "PKM ") return readPkm(data);
   let container: "pvr" | "dds",
     codec: CodecId,
@@ -153,6 +157,8 @@ export function inspectTexture(data: Buffer): TextureInfo {
       throw Error("首期仅支持普通 2D DDS");
     const fourcc = data.subarray(84, 88).toString();
     const legacy: Record<string, CodecId> = {
+      PTC2: "pvrtc1_rgba_2",
+      PTC4: "pvrtc1_rgba_4",
       DXT1: "bc1",
       DXT5: "bc3",
       ATI1: "bc4",

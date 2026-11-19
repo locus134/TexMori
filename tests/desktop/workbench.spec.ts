@@ -400,3 +400,22 @@ test("refreshes compatible containers and shows extensions and bpp", async () =>
   await expect(container.locator('option[value="ktx2"]')).toHaveCount(0);
  } finally {await app.close();}
 });
+
+test("defaults transparent RGB cleanup on and edits its alpha threshold", async()=>{
+ const app=await launchApp();
+ try {
+  const page=await app.firstWindow(),cleanup=page.getByRole("checkbox",{name:"清理透明像素 RGB",exact:true}),threshold=page.getByRole("spinbutton",{name:"Alpha 阈值",exact:true});
+  await expect(cleanup).toBeChecked();await expect(threshold).toHaveValue("0");
+  await threshold.fill("64");await expect(threshold).toHaveValue("64");
+  await cleanup.uncheck();await expect(threshold).toBeDisabled();
+  await cleanup.check();await expect(threshold).toHaveValue("64");
+  await page.getByLabel("编码格式",{exact:true}).selectOption("bc3");
+  await expect(cleanup).toBeChecked();await expect(threshold).toHaveValue("0");
+  await page.getByLabel("编码格式",{exact:true}).selectOption("etc2_rgba");
+  await expect(threshold).toHaveValue("64");
+  await app.evaluate(async({dialog},input)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[input]});},path.join(process.cwd(),"tests/fixtures/generated/rgba.png"));
+  await page.getByRole("button",{name:"导入图片"}).click();
+  await expect(page.getByText("预览已更新",{exact:true})).toBeVisible({timeout:30000});
+  await page.screenshot({path:"build/transparent-rgb-workbench.png"});
+ }finally{await app.close();}
+});

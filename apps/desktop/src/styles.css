@@ -968,3 +968,28 @@ progress {
 .pot-anchor-grid span { display: grid; place-items: center; width: 100%; height: 100%; border: 1px solid #62666d; border-radius: 4px; font-size: 18px; }
 .pot-anchor-grid input:checked + span { background: #335d8b; border-color: #83bfff; color: #fff; }
 .pot-anchor-grid input:focus-visible + span { outline: 2px solid #b3d8ff; outline-offset: 2px; }
+
+.transparent-rgb-control {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.transparent-rgb-control .check {
+  margin: 0;
+  flex-shrink: 0;
+}
+.transparent-rgb-control .alpha-threshold {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.alpha-threshold input {
+  width: 56px;
+  min-width: 0;
+}

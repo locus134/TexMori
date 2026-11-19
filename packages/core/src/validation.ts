@@ -10,6 +10,8 @@ const schema = z
     container: z.enum(["png", "pkm", "dds", "pvr", "ccz", "astc", "ktx", "ktx2"]),
     options: z
       .object({
+        cleanTransparentRgb: z.boolean().optional(),
+        alphaThreshold: z.number().int().min(0).max(255).optional(),
         multiplyRgbByAlpha: z.boolean().optional(),
         dither: z.boolean().optional(),
         heuristics: z.boolean().optional(),
@@ -57,7 +59,7 @@ export function validateRequest(value: unknown): ConversionRequest {
     const c = capability(r.codec ?? "");
     if (!c.containers.includes(r.container)) throw Error("编码与容器不匹配");
     if (c.available === false) throw Error(c.reason ?? "编码器不可用");
-    const allowed = ["mipmaps", "multiplyRgbByAlpha"];
+    const allowed = ["mipmaps", "multiplyRgbByAlpha", "cleanTransparentRgb", "alphaThreshold"];
     if (["etc1", "bc1"].includes(c.id)) allowed.push("dither");
     if (["etc2_rgb", "etc2_rgba"].includes(c.id)) allowed.push("heuristics");
     if (c.engine === "pvrtc")
@@ -76,6 +78,8 @@ export function validateRequest(value: unknown): ConversionRequest {
       throw Error("当前编码不保留 Alpha");
     if (r.options.multiplyRgbByAlpha && r.options.premultiply)
       throw Error("RGB 乘以 Alpha 与编码器预乘不能同时启用，避免重复相乘");
+    r.options.cleanTransparentRgb ??= true;
+    r.options.alphaThreshold ??= 0;
   } else {
     if (r.codec || active.length) throw Error("解码和容器转换不能包含编码参数");
     if (r.operation === "decode" && r.container !== "png")

@@ -399,3 +399,27 @@ it("preserves every mip payload when wrapping KTX and KTX2, including BC7", asyn
  }
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+it("clears RGB at or below the alpha threshold before multiplication, preserving alpha and the source",async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),"texmori-clean-rgb-")),signal=new AbortController().signal;
+ try {
+  const file=path.join(dir,"source.png"),row=[200,80,20,0,200,80,20,64,200,80,20,65,200,80,20,255];
+  await sharp(Buffer.from([...row,...row,...row,...row]),{raw:{width:4,height:4,channels:4}}).png().toFile(file);
+  const original=await readFile(file),[asset]=await new AssetService().import([file],signal);
+  const service=new ConversionService({etcpak:path.join(root,"build/etcpak/etcpak"),pvrtc:path.join(root,"build/engines/PVRTexToolCLI")});
+  const cases=[
+   [{},[0,0,0,0,200,80,20,64,200,80,20,65,200,80,20,255]],
+   [{cleanTransparentRgb:false},row],
+   [{alphaThreshold:64},[0,0,0,0,0,0,0,64,200,80,20,65,200,80,20,255]],
+   [{alphaThreshold:64,multiplyRgbByAlpha:true},[0,0,0,0,0,0,0,64,51,20,5,65,200,80,20,255]],
+   [{alphaThreshold:255},[0,0,0,0,0,0,0,64,0,0,0,65,0,0,0,255]],
+  ] as const;
+  for(const [index,[options,expected]] of cases.entries()){
+   const output=path.join(dir,String(index));
+   await service.run(asset,validateRequest({operation:"encode",codec:"bc3",container:"dds",options,output:{mode:"source",conflict:"skip"}}),output,signal,{});
+   const work=await sharp(path.join(output,"work.png")).ensureAlpha().raw().toBuffer();
+   expect([...work.subarray(0,16)]).toEqual(expected);
+  }
+  expect(await readFile(file)).toEqual(original);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

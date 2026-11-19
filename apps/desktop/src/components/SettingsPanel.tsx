@@ -199,6 +199,34 @@ export function SettingsPanel({
       {encode && (
         <section>
           <h3>编码参数</h3>
+          <div className="transparent-rgb-control" title="压缩前将 Alpha 小于或等于阈值的像素 RGB 置为 (0,0,0)，Alpha 保持不变，原文件不会修改">
+            <label className="check">
+              <input
+                aria-label="清理透明像素 RGB"
+                type="checkbox"
+                checked={request.options.cleanTransparentRgb !== false}
+                onChange={(e) => option("cleanTransparentRgb", e.target.checked)}
+              />
+              清理透明像素 RGB
+            </label>
+            <label className="alpha-threshold">
+              <span>Alpha ≤</span>
+              <input
+                aria-label="Alpha 阈值"
+                type="number"
+                min="0"
+                max="255"
+                step="1"
+                value={request.options.alphaThreshold ?? 0}
+                disabled={request.options.cleanTransparentRgb === false}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  if (Number.isFinite(value)) option("alphaThreshold", Math.max(0, Math.min(255, Math.round(value))));
+                  else if (!e.target.value) option("alphaThreshold", 0);
+                }}
+              />
+            </label>
+          </div>
           <label
             className="check"
             title="压缩前按通道执行 RGB × Alpha / 255，Alpha 保持不变，原文件不会修改"

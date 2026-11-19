@@ -45,6 +45,8 @@ export interface CodecCapability {
   reason?: string;
 }
 export interface EncodingOptions {
+  cleanTransparentRgb?: boolean;
+  alphaThreshold?: number;
   multiplyRgbByAlpha?: boolean;
   dither?: boolean;
   heuristics?: boolean;

@@ -1,4 +1,4 @@
-import type { CodecCapability, CodecId } from "./types";
+import type { CodecCapability, CodecId, Container } from "./types";
 const astcBlocks = [[4, 4], [5, 4], [5, 5], [6, 5], [6, 6], [8, 5], [8, 6], [8, 8], [10, 5], [10, 6], [10, 8], [10, 10], [12, 10], [12, 12]] as const;
 export const capabilities: CodecCapability[] = [
   ...astcBlocks.map(([width, height], index): CodecCapability => ({
@@ -175,6 +175,9 @@ export function codecLabel(c: CodecCapability) {
 }
 export function containerLabel(container: string) {
   return container === "ccz" ? "PVR.CCZ (.pvr.ccz)" : container.toUpperCase() + " (." + container + ")";
+}
+export function usesEncoderPremultiply(c: CodecCapability | undefined, container: Container) {
+  return container === "pvr" && c?.engine === "pvrtc" && c.channels.includes("A");
 }
 export const qualities = [
   "PVRTCFASTEST",

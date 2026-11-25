@@ -2,7 +2,7 @@ import type {
   CodecCapability,
   ConversionRequest,
 } from "../../../../packages/core/src/index";
-import { codecFamily, codecQualities, defaultQuality, codecLabel, containerLabel } from "../../../../packages/core/src/capabilities";
+import { codecFamily, codecQualities, defaultQuality, codecLabel, containerLabel, usesEncoderPremultiply } from "../../../../packages/core/src/capabilities";
 import { Fragment, useState } from "react";
 import { TinifySettings } from "./TinifySettings";
 export function KeyInput({
@@ -98,6 +98,8 @@ export function SettingsPanel({
 }) {
   const c = capabilities.find((c) => c.id === request.codec),
     encode = request.operation === "encode";
+  const encoderPremultiply = usesEncoderPremultiply(c, request.container);
+  const premultiplyLabel = encoderPremultiply ? "预乘 alpha（编码器）" : "预乘 alpha";
   const option = (key: string, value: unknown) =>
     onChange({ options: { ...request.options, [key]: value } });
   return (
@@ -229,22 +231,22 @@ export function SettingsPanel({
           </div>
           <label
             className="check"
-            title="压缩前按通道执行 RGB × Alpha / 255，Alpha 保持不变，原文件不会修改"
+            title={encoderPremultiply
+              ? "由编码器预乘 Alpha，并在 PVR 输出中记录预乘标记"
+              : "压缩前按通道执行 RGB × Alpha / 255，Alpha 保持不变，原文件不会修改"}
           >
             <input
-              aria-label="压缩前 RGB 乘以 Alpha"
               type="checkbox"
-              checked={!!request.options.multiplyRgbByAlpha}
+              checked={!!(request.options.premultiply || request.options.multiplyRgbByAlpha)}
               onChange={(e) => {
-                const next = {
-                  ...request.options,
-                  multiplyRgbByAlpha: e.target.checked,
-                };
-                if (e.target.checked) delete next.premultiply;
-                onChange({ options: next });
+                const options = { ...request.options };
+                delete options.premultiply;
+                delete options.multiplyRgbByAlpha;
+                if (e.target.checked) options[encoderPremultiply ? "premultiply" : "multiplyRgbByAlpha"] = true;
+                onChange({ options });
               }}
             />
-            压缩前 RGB 乘以 Alpha
+            {premultiplyLabel}
           </label>
           {["etc1", "bc1"].includes(request.codec!) && (
             <label className="check">
@@ -311,17 +313,6 @@ export function SettingsPanel({
                     <option value="linear">线性</option>
                     <option value="cubic">立方</option>
                   </select>
-                </label>
-              )}
-              {c.channels.includes("A") && !["astc", "ktx", "ktx2"].includes(request.container) && (
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={!!request.options.premultiply}
-                    disabled={!!request.options.multiplyRgbByAlpha}
-                    onChange={(e) => option("premultiply", e.target.checked)}
-                  />
-                  编码器预乘 Alpha
                 </label>
               )}
             </>

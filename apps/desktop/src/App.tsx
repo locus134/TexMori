@@ -8,12 +8,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   capability,
   targetDimensions,
+  usesEncoderPremultiply,
 } from "../../../packages/core/src/capabilities";
 import type { DesktopAsset, PlanSummary } from "./api";
 import { AssetList } from "./components/AssetList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 const api = window.texmori;
+function routePremultiply(request: ConversionRequest): ConversionRequest {
+  if (request.operation !== "encode" || !request.codec) return request;
+  const options = { ...request.options };
+  const enabled = options.premultiply || options.multiplyRgbByAlpha;
+  delete options.premultiply;
+  delete options.multiplyRgbByAlpha;
+  if (enabled) {
+    const encoder = usesEncoderPremultiply(capability(request.codec), request.container);
+    options[encoder ? "premultiply" : "multiplyRgbByAlpha"] = true;
+  }
+  return { ...request, options };
+}
 const initial: ConversionRequest = {
   operation: "encode",
   codec: "etc2_rgba",
@@ -170,8 +183,7 @@ export function App() {
         delete options.mipmaps;
         delete options.mipFilter;
       }
-      if (["astc", "ktx", "ktx2"].includes(container)) delete options.premultiply;
-      return { ...r, codec: c.id, container, options, encrypt: false, outputKeyRef: undefined };
+      return routePremultiply({ ...r, codec: c.id, container, options, encrypt: false, outputKeyRef: undefined });
     });
   }
   function change(p: Partial<ConversionRequest>) {
@@ -214,8 +226,7 @@ export function App() {
           delete options.mipmaps;
           delete options.mipFilter;
         }
-        if (["astc", "ktx", "ktx2"].includes(p.container)) delete options.premultiply;
-        return { ...r, ...p, options };
+        return routePremultiply({ ...r, ...p, options });
       }
       return { ...r, ...p };
     });

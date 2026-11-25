@@ -68,7 +68,7 @@ test("imports, previews actual ETC output, batches to a chosen folder and switch
     });
     await expect(page.getByRole("img", { name: "编码结果" })).toBeVisible();
     const multiply = page.getByRole("checkbox", {
-      name: "压缩前 RGB 乘以 Alpha",
+      name: "预乘 alpha",
       exact: true,
     });
     await expect(multiply).not.toBeChecked();
